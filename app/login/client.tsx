@@ -34,21 +34,32 @@ export default function LoginClient() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
       const user = userCredential.user
 
-      // Step 2: Get ID token
-      const idToken = await user.getIdToken()
+      // Step 2: Get fresh ID token — force refresh
+      let idToken = await user.getIdToken(true)
 
-      // Step 3: Create server session and verify booker status in one call
-      const sessionResponse = await fetch("/api/auth", {
+      // Step 3: Create server session
+      let sessionResponse = await fetch("/api/auth", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken }),
       })
 
+      // If token expired during long compile/network delay, get a new one and retry once
       if (!sessionResponse.ok) {
         const errorData = await sessionResponse.json()
-        throw new Error(errorData.message || "Failed to create session")
+        if (errorData.message?.includes("expired") || errorData.message?.includes("token")) {
+          console.warn("⚠️ Token expired in transit, refreshing and retrying...")
+          idToken = await user.getIdToken(true)
+          sessionResponse = await fetch("/api/auth", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ idToken }),
+          })
+        }
+        if (!sessionResponse.ok) {
+          const retryError = await sessionResponse.json()
+          throw new Error(retryError.message || "Failed to create session")
+        }
       }
 
       const sessionData = await sessionResponse.json()
@@ -59,20 +70,17 @@ export default function LoginClient() {
 
       // Step 4: Handle redirect based on isBooker status
       if (!isBooker) {
-        // Non-booker users are redirected to not-booker page
         console.log("⚠️ User is not a booker, redirecting to /not-booker")
         router.push("/not-booker")
       } else {
-        // Booker users are redirected to their intended destination
         console.log("✅ User is a booker, redirecting to:", redirect)
         router.push(redirect)
       }
     } catch (err: any) {
       console.error("Login error:", err)
-      
-      // Handle specific Firebase errors
+
       let errorMessage = err.message || "Failed to login. Please try again."
-      
+
       if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password" || err.code === "auth/user-not-found") {
         errorMessage = "Incorrect email or password"
       } else if (err.code === "auth/invalid-email") {
@@ -82,7 +90,7 @@ export default function LoginClient() {
       } else if (err.code === "auth/user-disabled") {
         errorMessage = "This account has been disabled"
       }
-      
+
       setError(errorMessage)
     } finally {
       setLoading(false)
@@ -109,7 +117,7 @@ export default function LoginClient() {
                 />
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <h1 className="text-5xl font-bold bg-gradient-to-r from-[#6b2fa5] via-[#8b3fc5] to-[#6b2fa5] bg-clip-text text-transparent">
                 Spotix Booker
@@ -167,18 +175,18 @@ export default function LoginClient() {
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     <div className="relative w-5 h-5">
-                      <Eye 
+                      <Eye
                         className={`absolute inset-0 w-5 h-5 transition-all duration-300 ${
-                          showPassword 
-                            ? 'opacity-0 scale-0 rotate-180' 
-                            : 'opacity-100 scale-100 rotate-0'
+                          showPassword
+                            ? "opacity-0 scale-0 rotate-180"
+                            : "opacity-100 scale-100 rotate-0"
                         }`}
                       />
-                      <EyeOff 
+                      <EyeOff
                         className={`absolute inset-0 w-5 h-5 transition-all duration-300 ${
-                          showPassword 
-                            ? 'opacity-100 scale-100 rotate-0' 
-                            : 'opacity-0 scale-0 -rotate-180'
+                          showPassword
+                            ? "opacity-100 scale-100 rotate-0"
+                            : "opacity-0 scale-0 -rotate-180"
                         }`}
                       />
                     </div>
@@ -216,6 +224,19 @@ export default function LoginClient() {
                 )}
               </button>
             </form>
+
+            {/* Signup Link */}
+            <p className="text-center text-sm text-slate-500">
+              Don't have an account?{" "}
+              <a
+                href="https://spotix.com.ng/auth/signup"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#6b2fa5] font-semibold hover:underline"
+              >
+                Sign up
+              </a>
+            </p>
           </div>
 
           {/* Footer Note */}

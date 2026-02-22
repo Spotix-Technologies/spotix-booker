@@ -756,32 +756,22 @@ export default function EventInfoPage({
 
             {activeTab === "payouts" && (
               <>
-                {loadedTabs.has("payouts") ? (
+                {loadedTabs.has("payouts") && eventData ? (
                   <PayoutsTab
-                    payouts={payouts}
                     availableBalance={availableBalance}
-                    totalPaidOut={totalPaidOut}
-                    selectedPayoutId={selectedPayoutId}
-                    actionCode={actionCode}
-                    copiedField={copiedField}
-                    visibleActionCodes={visibleActionCodes}
-                    setSelectedPayoutId={setSelectedPayoutId}
-                    setActionCode={setActionCode}
-                    handleConfirmPayout={() => {}}
-                    copyToClipboard={copyToClipboard}
-                    toggleActionCodeVisibility={toggleActionCodeVisibility}
-                    formatTransactionTime={formatTransactionTime}
                     eventData={eventData}
                     userId={userId}
                     eventId={eventId}
                     currentUserId={currentUser?.uid || ""}
                     attendees={attendees}
+                    payId={eventData?.payId || ""}
                   />
                 ) : (
                   <TabSkeleton />
                 )}
               </>
             )}
+
 
             {activeTab === "edit" && (
               <>
