@@ -79,7 +79,6 @@ export const metadata: Metadata = {
     ],
     apple: "/xmas.png",
   },
-  manifest: "/manifest.json",
   verification: {
     // Add verification codes here when available
   },
