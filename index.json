@@ -1,0 +1,23 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "refreshTokens",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "deviceId", "order": "ASCENDING" },
+        { "fieldPath": "isRevoked", "order": "ASCENDING" },
+        { "fieldPath": "expiresAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "refreshTokens",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "isRevoked", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

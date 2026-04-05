@@ -1,93 +1,95 @@
+/**
+ * app/api/auth/logout/route.ts
+ *
+ * POST /api/auth/logout
+ *
+ * Revokes the refresh token in Firestore and clears all auth cookies.
+ * The access token (spotix_at) is short-lived (15 min) so there's no need
+ * to server-side invalidate it — clearing the cookie is sufficient.
+ *
+ * Optional body:
+ *   allDevices : boolean — if true, revoke ALL tokens for this user
+ *
+ * Auth: spotix_at httpOnly cookie (set by /api/auth or /api/auth/refresh)
+ */
+
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth } from "@/lib/firebase-admin";
-import { cookies } from "next/headers";
+import { verifyAccessToken } from "@/lib/auth-tokens";
+import {
+  getRefreshTokenById,
+  revokeRefreshToken,
+  revokeAllTokensForUser,
+} from "@/lib/refresh-token-repo";
+import {
+  COOKIE_ACCESS_TOKEN,
+  COOKIE_REFRESH_TOKEN_ID,
+  clearAuthCookies,
+} from "../route";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/**
- * Logout API Route
- * 
- * POST: Clear server session and revoke user tokens
- */
+const DEV_TAG = "API developed and maintained by Spotix Technologies";
 
-/**
- * Handle non-POST requests
- */
-async function handleForbiddenMethod(method: string) {
-  return NextResponse.json(
-    {
-      error: "Method Not Allowed",
-      message: `${method} method is forbidden`,
-      developer: "API developed and maintained by Spotix Technologies",
-    },
-    { status: 405 }
-  );
+function ok<T extends object>(data: T) {
+  return NextResponse.json({ ...data, developer: DEV_TAG });
 }
 
-export async function GET(request: NextRequest) {
-  return handleForbiddenMethod(request.method);
+function err(error: string, message: string, status: number) {
+  return NextResponse.json({ error, message, developer: DEV_TAG }, { status });
 }
 
-export async function PUT(request: NextRequest) {
-  return handleForbiddenMethod(request.method);
-}
-
-export async function DELETE(request: NextRequest) {
-  return handleForbiddenMethod(request.method);
-}
-
-export async function PATCH(request: NextRequest) {
-  return handleForbiddenMethod(request.method);
-}
-
-/**
- * POST Handler - Logout and clear session
- */
 export async function POST(request: NextRequest) {
-  try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session")?.value;
+  // ── 1. Verify access token from httpOnly cookie ──────────────────────────────
+  const token = request.cookies.get(COOKIE_ACCESS_TOKEN)?.value;
 
-    // Clear cookies immediately
-    cookieStore.delete("session");
-    cookieStore.delete("isBooker");
-
-    // If there's a session cookie, revoke all refresh tokens for the user
-    if (sessionCookie) {
-      try {
-        const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie);
-        await adminAuth.revokeRefreshTokens(decodedClaims.uid);
-        console.log("Refresh tokens revoked for user:", decodedClaims.uid);
-      } catch (error) {
-        console.error("Error revoking tokens:", error);
-        // Continue anyway since cookies are already cleared
-      }
-    }
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Logged out successfully",
-        developer: "API developed and maintained by Spotix Technologies",
-      },
-      { status: 200 }
-    );
-  } catch (error: any) {
-    console.error("Logout error:", error);
-
-    // Even if there's an error, clear the cookies
-    const cookieStore = await cookies();
-    cookieStore.delete("session");
-    cookieStore.delete("isBooker");
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Logged out successfully",
-        developer: "API developed and maintained by Spotix Technologies",
-      },
-      { status: 200 }
-    );
+  if (!token) {
+    // No token — just clear cookies and succeed (idempotent logout)
+    const res = ok({ success: true, message: "Logged out" });
+    clearAuthCookies(res);
+    return res;
   }
+
+  let payload;
+  try {
+    payload = await verifyAccessToken(token, "spotix-booker");
+  } catch {
+    // Expired access token on logout is fine — still clear cookies
+    const res = ok({ success: true, message: "Logged out" });
+    clearAuthCookies(res);
+    return res;
+  }
+
+  // ── 2. Parse optional body ───────────────────────────────────────────────────
+  let allDevices = false;
+  try {
+    const body = await request.json();
+    allDevices = body?.allDevices === true;
+  } catch {
+    // Body is optional
+  }
+
+  // ── 3. All-device logout ─────────────────────────────────────────────────────
+  if (allDevices) {
+    await revokeAllTokensForUser(payload.uid);
+    const res = ok({ success: true, message: "Logged out from all devices" });
+    clearAuthCookies(res);
+    return res;
+  }
+
+  // ── 4. Single-device logout — revoke this device's refresh token ─────────────
+  const refreshTokenId = request.cookies.get(COOKIE_REFRESH_TOKEN_ID)?.value;
+
+  if (refreshTokenId) {
+    const stored = await getRefreshTokenById(refreshTokenId);
+
+    if (stored && stored.userId === payload.uid) {
+      await revokeRefreshToken(refreshTokenId);
+    }
+    // If token not found or already revoked — treat as success
+  }
+
+  const res = ok({ success: true, message: "Logged out successfully" });
+  clearAuthCookies(res);
+  return res;
 }

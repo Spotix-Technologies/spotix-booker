@@ -11,6 +11,7 @@ import { ParticlesBackground } from "@/components/particles-background"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Mail, Lock, AlertCircle, ArrowRight, Eye, EyeOff } from "lucide-react"
 import Image from "next/image"
+import { storeAccessToken, getDeviceId, collectDeviceMeta } from "@/lib/auth-client"
 
 export default function LoginClient() {
   const router = useRouter()
@@ -21,7 +22,6 @@ export default function LoginClient() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
-  // Get redirect parameter
   const redirect = searchParams.get("redirect") || "/"
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -34,28 +34,36 @@ export default function LoginClient() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
       const user = userCredential.user
 
-      // Step 2: Get fresh ID token — force refresh
-      let idToken = await user.getIdToken(true)
+      // Step 2: Get fresh ID token
+      const idToken = await user.getIdToken(true)
 
-      // Step 3: Create server session
+      // Step 3: Resolve device identity
+      const deviceId = getDeviceId()       // stable UUID persisted in localStorage
+      const deviceMeta = collectDeviceMeta() // platform, model, appVersion
+
+      // Step 4: Exchange Firebase ID token for our access + refresh tokens
       let sessionResponse = await fetch("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({ idToken, deviceId, deviceMeta }),
       })
 
-      // If token expired during long compile/network delay, get a new one and retry once
+      // If token expired mid-flight, get a fresh one and retry once
       if (!sessionResponse.ok) {
         const errorData = await sessionResponse.json()
-        if (errorData.message?.includes("expired") || errorData.message?.includes("token")) {
-          console.warn("⚠️ Token expired in transit, refreshing and retrying...")
-          idToken = await user.getIdToken(true)
+        if (
+          errorData.message?.includes("expired") ||
+          errorData.message?.includes("token")
+        ) {
+          console.warn("⚠️ Token expired in transit — refreshing and retrying")
+          const freshToken = await user.getIdToken(true)
           sessionResponse = await fetch("/api/auth", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ idToken }),
+            body: JSON.stringify({ idToken: freshToken, deviceId, deviceMeta }),
           })
         }
+
         if (!sessionResponse.ok) {
           const retryError = await sessionResponse.json()
           throw new Error(retryError.message || "Failed to create session")
@@ -63,17 +71,20 @@ export default function LoginClient() {
       }
 
       const sessionData = await sessionResponse.json()
+
+      // Step 5: Persist access token in memory (refresh token is in httpOnly cookie)
+      storeAccessToken(sessionData.accessToken)
+
       const isBooker = sessionData?.user?.isBooker || false
 
       console.log("✅ Session created successfully")
-      console.log("📊 User data:", sessionData.user)
 
-      // Step 4: Handle redirect based on isBooker status
+      // Step 6: Route based on booker status
       if (!isBooker) {
-        console.log("⚠️ User is not a booker, redirecting to /not-booker")
+        console.warn("⚠️ User is not a booker — redirecting to /not-booker")
         router.push("/not-booker")
       } else {
-        console.log("✅ User is a booker, redirecting to:", redirect)
+        console.log("✅ Redirecting to:", redirect)
         router.push(redirect)
       }
     } catch (err: any) {
@@ -81,7 +92,11 @@ export default function LoginClient() {
 
       let errorMessage = err.message || "Failed to login. Please try again."
 
-      if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password" || err.code === "auth/user-not-found") {
+      if (
+        err.code === "auth/invalid-credential" ||
+        err.code === "auth/wrong-password" ||
+        err.code === "auth/user-not-found"
+      ) {
         errorMessage = "Incorrect email or password"
       } else if (err.code === "auth/invalid-email") {
         errorMessage = "Please enter a valid email address"
@@ -125,12 +140,12 @@ export default function LoginClient() {
               <p className="text-lg text-slate-600">Sign in to your booker dashboard</p>
             </div>
 
-            {/* Show redirect notice if present */}
             {redirect && redirect !== "/" && (
               <div className="flex items-center gap-2 justify-center p-3 rounded-lg bg-blue-50 border border-blue-200">
                 <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0" />
                 <p className="text-sm text-blue-800">
-                  Please sign in to continue to <span className="font-semibold">{redirect}</span>
+                  Please sign in to continue to{" "}
+                  <span className="font-semibold">{redirect}</span>
                 </p>
               </div>
             )}
@@ -141,7 +156,9 @@ export default function LoginClient() {
             <form onSubmit={handleLogin} className="space-y-5">
               {/* Email Field */}
               <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">Email Address</label>
+                <label className="block text-sm font-semibold text-slate-700">
+                  Email Address
+                </label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <input
@@ -157,7 +174,9 @@ export default function LoginClient() {
 
               {/* Password Field */}
               <div className="space-y-2">
-                <label className="block text-sm font-semibold text-slate-700">Password</label>
+                <label className="block text-sm font-semibold text-slate-700">
+                  Password
+                </label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <input
