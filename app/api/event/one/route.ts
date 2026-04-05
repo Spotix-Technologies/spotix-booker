@@ -1,7 +1,7 @@
 /**
- * app/api/events/one/route.ts
+ * app/api/events/route.ts
  *
- * POST /api/events/one — Create a new event (authenticated bookers only)
+ * POST /api/events — Create a new event (authenticated bookers only)
  *
  * ── Auth ──────────────────────────────────────────────────────────────────────
  * Identity is read from the x-user-id / x-user-is-booker headers injected by
@@ -64,7 +64,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { verifyAccessToken } from "@/lib/auth-tokens";
-import { COOKIE_ACCESS_TOKEN } from "../../auth/route";
+import { COOKIE_ACCESS_TOKEN } from "@/api/auth/route";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -122,7 +122,7 @@ async function resolveIdentity(
   if (!token) return null;
 
   try {
-    const payload = await verifyAccessToken(token);
+    const payload = await verifyAccessToken(token, "spotix-booker");
     return { uid: payload.uid, isBooker: payload.isBooker };
   } catch {
     return null;
