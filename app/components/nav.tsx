@@ -5,8 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { Menu, X, LogOut, LogIn } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { signOut } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { logout } from "@/lib/auth-client"
 import { useAuth } from "@/hooks/useAuth"
 import { LogoutDialog } from "@/components/logout-dialog"
 
@@ -19,16 +18,12 @@ export function Nav() {
   const toggleMenu = () => setIsOpen((prev) => !prev)
 
   // Called by LogoutDialog after the server-side logout API succeeds.
-  // We still need to clear the Firebase client session here.
+  // Use our custom logout function which handles token cleanup and cache busting.
   const handleLogoutComplete = async () => {
     setIsLogoutDialogOpen(false)
     setIsOpen(false)
-    try {
-      await signOut(auth)
-    } catch (error) {
-      console.error("❌ Error signing out from client:", error)
-    }
-    router.push("/login")
+    // The logout function will clear access tokens, bust caches, and redirect to /login
+    logout()
   }
 
   const navItems = [
