@@ -290,27 +290,3 @@ export async function logoutAllDevices(redirectTo = "/login"): Promise<void> {
     window.location.href = redirectTo
   }
 }
-
-/**
- * Log out from all devices.
- * Also busts all dashboard/events caches to prevent stale data after re-login.
- */
-export async function logoutAllDevices(redirectTo = "/login"): Promise<void> {
-  try {
-    await fetch("/api/auth/logout", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ allDevices: true }),
-    })
-  } catch {
-    // Best-effort
-  }
-
-  clearAccessToken()
-  bustAllCaches()
-
-  if (typeof window !== "undefined") {
-    window.location.href = redirectTo
-  }
-}
