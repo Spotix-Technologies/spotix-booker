@@ -2,8 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { onAuthStateChanged } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { authFetch, getAccessToken } from "@/lib/auth-client"
 // import { Nav } from "@/components/nav"
 import { Preloader } from "@/components/preloader"
 import { ParticlesBackground } from "@/components/particles-background"
@@ -61,12 +60,38 @@ export default function EventsPage() {
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (!user) { router.push("/login"); return }
-      setUserId(user.uid)
-      setAuthChecked(true)
-    })
-    return () => unsub()
+    // Check if we have a valid access token (middleware already validated it)
+    if (!getAccessToken()) {
+      router.push("/login")
+      return
+    }
+
+    // Fetch user ID from the API
+    const initializeAuth = async () => {
+      try {
+        const userResponse = await authFetch("/api/user/me")
+        if (!userResponse.ok) {
+          router.push("/login")
+          return
+        }
+
+        const userData = await userResponse.json()
+        const uid = userData?.uid || userData?.id
+
+        if (!uid) {
+          router.push("/login")
+          return
+        }
+
+        setUserId(uid)
+        setAuthChecked(true)
+      } catch (err) {
+        console.error("Auth initialization error:", err)
+        router.push("/login")
+      }
+    }
+
+    initializeAuth()
   }, [router])
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
@@ -93,8 +118,8 @@ export default function EventsPage() {
 
     try {
       const [ownedRes, collabRes] = await Promise.all([
-        fetch("/api/event/list?action=owned"),
-        fetch("/api/event/list?action=collaborated"),
+        authFetch("/api/event/list?action=owned"),
+        authFetch("/api/event/list?action=collaborated"),
       ])
 
       if (ownedRes.ok) {

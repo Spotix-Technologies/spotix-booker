@@ -18,6 +18,7 @@
  */
 
 import { adminDb } from "@/lib/firebase-admin"
+import { verifyAccessToken } from "@/lib/auth-tokens"
 import { type NextRequest, NextResponse } from "next/server"
 
 export const runtime = "nodejs"
@@ -25,16 +26,43 @@ export const dynamic = "force-dynamic"
 
 export async function GET(request: NextRequest) {
   try {
+    // Resolve user ID from middleware header or cookie fallback
+    let xUserId = request.headers.get("x-user-id")
+    if (!xUserId) {
+      const token = request.cookies.get("spotix_at")?.value
+      if (!token) {
+        return NextResponse.json(
+          { error: "Unauthorized", message: "Not authenticated" },
+          { status: 401 }
+        )
+      }
+      try {
+        const payload = await verifyAccessToken(token, "spotix-booker")
+        xUserId = payload.uid
+      } catch {
+        return NextResponse.json(
+          { error: "Unauthorized", message: "Invalid or expired token" },
+          { status: 401 }
+        )
+      }
+    }
+
     const userId = request.nextUrl.searchParams.get("userId")
 
     if (!userId) {
       return NextResponse.json({ error: "userId is required" }, { status: 400 })
     }
 
+    // Ensure the requesting user matches the requested userId (prevent cross-user data access)
+    if (xUserId !== userId) {
+      console.warn(`[api/revenue] User ${xUserId} attempted to access data for ${userId}`)
+      return NextResponse.json(
+        { error: "Forbidden", message: "You can only access your own data" },
+        { status: 403 }
+      )
+    }
+
     // ── 1. Read aggregated stats from the user document ───────────────────────
-    // These fields are maintained by server-side increments (event creation,
-    // ticket purchase webhooks, payout processing) so we never need to sum
-    // across the events collection for these numbers.
     const userDoc = await adminDb.collection("users").doc(userId).get()
 
     if (!userDoc.exists) {
@@ -51,11 +79,6 @@ export async function GET(request: NextRequest) {
     const availableBalance: number = totalRevenue - totalPaidOut
 
     // ── 2. Query flat events collection by organizerId ────────────────────────
-    // We need per-status counts and the recent events list — these cannot be
-    // derived from user-doc counters alone, so we query the collection.
-    //
-    // Required Firestore composite index:
-    //   Collection: events | Fields: organizerId ASC, createdAt DESC
     const eventsSnap = await adminDb
       .collection("events")
       .where("organizerId", "==", userId)
@@ -71,7 +94,6 @@ export async function GET(request: NextRequest) {
 
       if (d.status === "active") activeEvents++
       else if (d.status === "inactive") inactiveEvents++
-      // "cancelled" and "completed" are intentionally excluded from both counts
 
       recentEventsData.push({
         id: doc.id,
@@ -79,13 +101,11 @@ export async function GET(request: NextRequest) {
         eventDate: d.eventDate,
         ticketsSold: d.ticketsSold || 0,
         revenue: d.revenue || 0,
-        // availableBalance per event: revenue minus whatever has been paid out for it
         availableBalance: d.availableRevenue ?? (d.revenue || 0) - (d.paidOut || 0),
         status: d.status || "inactive",
       })
     }
 
-    // recentEventsData is already ordered by createdAt desc from the query
     const recentEvents = recentEventsData.slice(0, 5)
 
     return NextResponse.json({

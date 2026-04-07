@@ -2,9 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { onAuthStateChanged } from "firebase/auth"
-import { auth, db } from "@/lib/firebase"
-import { doc, getDoc } from "firebase/firestore"
+import { authFetch, getAccessToken } from "@/lib/auth-client"
 import { Preloader } from "@/components/preloader"
 import { ParticlesBackground } from "@/components/particles-background"
 // import { Nav } from "@/components/nav"
@@ -42,7 +40,7 @@ interface CachedDashboard {
   cachedAt: number   // Date.now() ms timestamp
 }
 
-// ── Cache helpers ──────────────────────────────────────────────────────────────
+// ── Cache helpers ──────────────────────────────────────────────────────────
 
 const CACHE_TTL_MS = 10 * 60 * 1000  // 10 minutes
 
@@ -82,17 +80,6 @@ function bustCache(userId: string) {
   }
 }
 
-function cacheAge(userId: string): number | null {
-  try {
-    const raw = localStorage.getItem(getCacheKey(userId))
-    if (!raw) return null
-    const cached: CachedDashboard = JSON.parse(raw)
-    return Date.now() - cached.cachedAt
-  } catch {
-    return null
-  }
-}
-
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -103,7 +90,6 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<Event[]>([])
   const [userName, setUserName] = useState("Booker")
   const [error, setError] = useState<string | null>(null)
-  const [authChecked, setAuthChecked] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [servedFromCache, setServedFromCache] = useState(false)
@@ -111,38 +97,37 @@ export default function DashboardPage() {
   // ── Auth check ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        router.push("/login")
-        return
-      }
+    // Check if we have a valid access token (middleware already validated it)
+    if (!getAccessToken()) {
+      router.push("/login")
+      return
+    }
 
+    // Fetch user ID from the API
+    const initializeAuth = async () => {
       try {
-        const userDocRef = doc(db, "users", user.uid)
-        const userDoc = await getDoc(userDocRef)
-
-        if (!userDoc.exists()) {
-          router.push("/not-a-booker")
+        const userResponse = await authFetch("/api/user/me")
+        if (!userResponse.ok) {
+          router.push("/login")
           return
         }
 
-        const userData = userDoc.data()
-        const isBooker = userData?.role === "booker" || userData?.isBooker === true
+        const userData = await userResponse.json()
+        const uid = userData?.uid || userData?.id
 
-        if (!isBooker) {
-          router.push("/not-a-booker")
+        if (!uid) {
+          router.push("/login")
           return
         }
 
-        setUserId(user.uid)
-        setAuthChecked(true)
+        setUserId(uid)
       } catch (err) {
-        console.error("Auth check error:", err)
+        console.error("Auth initialization error:", err)
         router.push("/login")
       }
-    })
+    }
 
-    return () => unsubscribe()
+    initializeAuth()
   }, [router])
 
   // ── Fetch / cache logic ───────────────────────────────────────────────────────
@@ -171,7 +156,7 @@ export default function DashboardPage() {
         setIsRefreshing(forceRefresh)
         setServedFromCache(false)
 
-        const response = await fetch(`/api/revenue?userId=${userId}`)
+        const response = await authFetch(`/api/revenue?userId=${userId}`)
         const data = await response.json()
 
         if (!response.ok) {
@@ -234,7 +219,7 @@ export default function DashboardPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
-  if (!authChecked) return <Preloader isLoading={true} />
+  if (loading) return <Preloader isLoading={true} />
 
   return (
     <>

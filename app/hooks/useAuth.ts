@@ -1,27 +1,56 @@
 "use client"
 
 import { useEffect, useState, createContext, useContext, ReactNode, createElement } from "react"
-import { onAuthStateChanged, User } from "firebase/auth"
-import { auth } from "@/lib/firebase" // adjust path if needed
+import { authFetch, getAccessToken } from "@/lib/auth-client"
+
+type User = {
+  id: string
+  uid: string
+  email: string
+  fullName?: string
+  isBooker?: boolean
+} | null
 
 type AuthContextType = {
-  user: User | null
+  user: User
   loading: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<User>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser)
-      setLoading(false)
-    })
+    const initializeAuth = async () => {
+      // Check if we have a valid access token (set by middleware)
+      if (!getAccessToken()) {
+        setLoading(false)
+        return
+      }
 
-    return () => unsubscribe()
+      try {
+        // Fetch user data from our custom auth API
+        const response = await authFetch("/api/user/me")
+        if (response.ok) {
+          const userData = await response.json()
+          setUser({
+            id: userData.uid || userData.id,
+            uid: userData.uid || userData.id,
+            email: userData.email,
+            fullName: userData.fullName,
+            isBooker: userData.isBooker,
+          })
+        }
+      } catch (err) {
+        console.error("Failed to initialize auth:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    initializeAuth()
   }, [])
 
   return createElement(

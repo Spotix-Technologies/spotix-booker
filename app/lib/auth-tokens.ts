@@ -61,8 +61,7 @@ export interface DeviceMeta {
 export async function signAccessToken(
   payload: AccessTokenPayload,
   audience: TokenAudience
-): Promise<string> {
-  return new jose.SignJWT({ ...payload })
+): Promise<string> {  return new jose.SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${ACCESS_TOKEN_TTL_SECONDS}s`)

@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { onAuthStateChanged } from "firebase/auth"
-import { auth, db } from "@/lib/firebase"
-import { doc, getDoc } from "firebase/firestore"
+import { authFetch, getAccessToken } from "@/lib/auth-client"
 import { Preloader } from "@/components/preloader"
 import { ParticlesBackground } from "@/components/particles-background"
 // import { Nav } from "@/components/nav"
@@ -40,41 +38,42 @@ export default function ProfilePage() {
   const [authChecked, setAuthChecked] = useState(false)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        router.push("/login")
-        return
-      }
+    // Check if we have a valid access token (middleware already validated it)
+    if (!getAccessToken()) {
+      router.push("/login")
+      return
+    }
 
+    const loadProfileData = async () => {
       try {
-        const userDocRef = doc(db, "users", user.uid)
-        const userDoc = await getDoc(userDocRef)
-
-        if (!userDoc.exists()) {
-          router.push("/not-a-booker")
+        // Fetch user data from the API (protected by middleware + authFetch)
+        const userResponse = await authFetch("/api/user/me")
+        if (!userResponse.ok) {
+          router.push("/login")
           return
         }
 
-        const userData = userDoc.data()
-        const isBooker = userData?.role === "booker" || userData?.isBooker === true
+        const userData = await userResponse.json()
+        const userId = userData?.uid || userData?.id
 
-        if (!isBooker) {
-          router.push("/not-a-booker")
+        if (!userId) {
+          router.push("/login")
           return
         }
 
+        // Fetch profile stats and BVT data using authFetch
         const [bvtResponse, statsResponse] = await Promise.all([
-          fetch(`/api/profile/bvt?userId=${user.uid}`),
-          fetch(`/api/profile/stats?userId=${user.uid}`),
+          authFetch(`/api/profile/bvt?userId=${userId}`),
+          authFetch(`/api/profile/stats?userId=${userId}`),
         ])
 
         const bvtData = await bvtResponse.json()
         const statsData = await statsResponse.json()
 
         setProfileData({
-          uid: user.uid,
+          uid: userId,
           username: userData.username || "",
-          email: user.email || "",
+          email: userData.email || "",
           fullName: userData.fullName || "",
           profilePicture: userData.profilePicture || "/placeholder.svg",
           bookerName: userData.bookerName || userData.fullName || "",
@@ -84,7 +83,7 @@ export default function ProfilePage() {
           bankName: userData.bankName || "",
           eventsCreated: statsData.eventsCreated || 0,
           totalRevenue: statsData.totalRevenue || 0,
-          joinDate: user.metadata?.creationTime || new Date().toISOString(),
+          joinDate: userData.createdAt || new Date().toISOString(),
           isVerified: userData.isVerified || false,
           bvt: bvtData.bvt || "",
           enabledCollaboration: userData.enabledCollaboration || false,
@@ -97,9 +96,9 @@ export default function ProfilePage() {
       } finally {
         setLoading(false)
       }
-    })
+    }
 
-    return () => unsubscribe()
+    loadProfileData()
   }, [router])
 
   if (!authChecked) {
