@@ -4,8 +4,6 @@ import type React from "react"
 
 import { useState } from "react"
 import Link from "next/link"
-import { auth } from "@/lib/firebase"
-import { signInWithEmailAndPassword } from "firebase/auth"
 import { Preloader } from "@/components/preloader"
 import { ParticlesBackground } from "@/components/particles-background"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -60,56 +58,34 @@ export default function LoginClient() {
     setLoading(true)
 
     try {
-      // Step 1: Sign in with Firebase Client SDK
-      const userCredential = await signInWithEmailAndPassword(auth, email, password)
-      const user = userCredential.user
-
-      // Step 2: Get fresh ID token
-      const idToken = await user.getIdToken(true)
-
-      // Step 3: Resolve device identity
+      // Step 1: Resolve device identity
       const deviceId = getDeviceId()       // stable UUID persisted in localStorage
       const deviceMeta = collectDeviceMeta() // platform, model, appVersion
 
-      // Step 4: Exchange Firebase ID token for our access + refresh tokens
-      let sessionResponse = await fetch("/api/auth", {
+      // Step 2: Send credentials directly to our login endpoint
+      // (The endpoint will authenticate against Firebase and return our access/refresh tokens)
+      let sessionResponse = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken, deviceId, deviceMeta }),
+        body: JSON.stringify({ email, password, deviceId, deviceMeta }),
       })
 
-      // If token expired mid-flight, get a fresh one and retry once
+      // If request failed, get error details
       if (!sessionResponse.ok) {
         const errorData = await sessionResponse.json()
-        if (
-          errorData.message?.includes("expired") ||
-          errorData.message?.includes("token")
-        ) {
-          console.warn("⚠️ Token expired in transit — refreshing and retrying")
-          const freshToken = await user.getIdToken(true)
-          sessionResponse = await fetch("/api/auth", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ idToken: freshToken, deviceId, deviceMeta }),
-          })
-        }
-
-        if (!sessionResponse.ok) {
-          const retryError = await sessionResponse.json()
-          throw new Error(retryError.message || "Failed to create session")
-        }
+        throw new Error(errorData.message || "Failed to login")
       }
 
       const sessionData = await sessionResponse.json()
 
-      // Step 5: Persist access token in memory (refresh token is in httpOnly cookie)
+      // Step 3: Persist access token in memory (refresh token is in httpOnly cookie)
       storeAccessToken(sessionData.accessToken)
 
       const isBooker = sessionData?.user?.isBooker || false
 
       console.log("✅ Session created successfully")
 
-      // Step 6: Route based on booker status
+      // Step 4: Route based on booker status
       if (!isBooker) {
         console.warn("⚠️ User is not a booker — redirecting to /not-booker")
         router.push("/not-booker")
@@ -123,17 +99,14 @@ export default function LoginClient() {
 
       let errorMessage = err.message || "Failed to login. Please try again."
 
-      if (
-        err.code === "auth/invalid-credential" ||
-        err.code === "auth/wrong-password" ||
-        err.code === "auth/user-not-found"
-      ) {
+      // Handle common error messages from our API
+      if (errorMessage.includes("Incorrect email") || errorMessage.includes("password")) {
         errorMessage = "Incorrect email or password"
-      } else if (err.code === "auth/invalid-email") {
+      } else if (errorMessage.includes("email")) {
         errorMessage = "Please enter a valid email address"
-      } else if (err.code === "auth/too-many-requests") {
+      } else if (errorMessage.includes("too many") || errorMessage.includes("attempts")) {
         errorMessage = "Too many failed login attempts. Please try again later"
-      } else if (err.code === "auth/user-disabled") {
+      } else if (errorMessage.includes("disabled")) {
         errorMessage = "This account has been disabled"
       }
 
