@@ -291,15 +291,9 @@ export async function logoutAllDevices(redirectTo = "/login"): Promise<void> {
   }
 }
 
-  clearAccessToken();
-
-  if (typeof window !== "undefined") {
-    window.location.href = redirectTo;
-  }
-}
-
 /**
  * Log out from all devices.
+ * Also busts all dashboard/events caches to prevent stale data after re-login.
  */
 export async function logoutAllDevices(redirectTo = "/login"): Promise<void> {
   try {
@@ -308,14 +302,15 @@ export async function logoutAllDevices(redirectTo = "/login"): Promise<void> {
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ allDevices: true }),
-    });
+    })
   } catch {
     // Best-effort
   }
 
-  clearAccessToken();
+  clearAccessToken()
+  bustAllCaches()
 
   if (typeof window !== "undefined") {
-    window.location.href = redirectTo;
+    window.location.href = redirectTo
   }
 }
