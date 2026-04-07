@@ -4,7 +4,7 @@ import { useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
 import { ParticlesBackground } from "@/components/particles-background"
-import { Nav } from "@/components/nav"
+// import { Nav } from "@/components/nav"
 import { CheckCircle, Sparkles, Calendar, Eye } from "lucide-react"
 import confetti from "canvas-confetti"
 
@@ -73,7 +73,7 @@ export default function SuccessPage() {
     <>
       <ParticlesBackground />
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-purple-50">
-        <Nav />
+        {/* <Nav /> */}
 
         <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
           <div className="text-center space-y-8">

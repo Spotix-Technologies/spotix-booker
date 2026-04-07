@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { User, Mail, ShoppingCart, Shield, ChevronUp, Search, Filter } from "lucide-react"
+import { User, Mail, ShoppingCart, Shield, ChevronUp, Search, Filter, Download } from "lucide-react"
+import RegistryDialog from "./helper/registry-dialog"
 
 interface AttendeeData {
   id: string
@@ -17,12 +18,14 @@ interface AttendeeData {
 interface AttendeesTabProps {
   attendees: AttendeeData[]
   formatFirestoreTimestamp: (timestamp: any) => string
+  eventId: string
 }
 
-export default function AttendeesTab({ attendees, formatFirestoreTimestamp }: AttendeesTabProps) {
+export default function AttendeesTab({ attendees, formatFirestoreTimestamp, eventId }: AttendeesTabProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [verificationFilter, setVerificationFilter] = useState<"all" | "verified" | "unverified">("all")
   const [selectedAttendee, setSelectedAttendee] = useState<AttendeeData | null>(null)
+  const [registryDialogOpen, setRegistryDialogOpen] = useState(false)
 
   const filteredAttendees = useMemo(() => {
     return attendees.filter((attendee) => {
@@ -43,9 +46,43 @@ export default function AttendeesTab({ attendees, formatFirestoreTimestamp }: At
     setSelectedAttendee(selectedAttendee?.id === attendee.id ? null : attendee)
   }
 
+  const handleExport = (format: "json" | "csv") => {
+    // Always export all attendees, mapped to the 4 required fields
+    const exportData = attendees.map((a) => ({
+      fullName: a.fullName,
+      email: a.email,
+      ticketId: a.id,
+      ticketType: a.ticketType,
+    }))
+
+    const fileName = `spotix_${eventId}`
+
+    if (format === "json") {
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" })
+      triggerDownload(blob, `${fileName}.json`)
+    } else {
+      const headers = ["fullName", "email", "ticketId", "ticketType"]
+      const rows = exportData.map((row) =>
+        headers.map((h) => `"${String(row[h as keyof typeof row]).replace(/"/g, '""')}"`).join(",")
+      )
+      const csv = [headers.join(","), ...rows].join("\n")
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+      triggerDownload(blob, `${fileName}.csv`)
+    }
+  }
+
+  const triggerDownload = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = fileName
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-6">
-      {/* Search and Filter Controls */}
+      {/* Search, Filter and Download Controls */}
       <div className="flex flex-col md:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
@@ -70,6 +107,14 @@ export default function AttendeesTab({ attendees, formatFirestoreTimestamp }: At
           </select>
           <ChevronUp className="absolute right-4 top-1/2 -translate-y-1/2 rotate-180 text-slate-400 pointer-events-none" size={20} />
         </div>
+        <button
+          onClick={() => setRegistryDialogOpen(true)}
+          disabled={attendees.length === 0}
+          className="flex items-center justify-center gap-2 px-5 py-3 bg-[#6b2fa5] text-white font-semibold text-sm rounded-xl shadow-lg shadow-[#6b2fa5]/25 hover:bg-[#5a2690] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 whitespace-nowrap"
+        >
+          <Download size={18} />
+          Download
+        </button>
       </div>
 
       {/* Stats Summary */}
@@ -270,6 +315,14 @@ export default function AttendeesTab({ attendees, formatFirestoreTimestamp }: At
           </div>
         </div>
       )}
+
+      {/* Registry Export Dialog */}
+      <RegistryDialog
+        open={registryDialogOpen}
+        onClose={() => setRegistryDialogOpen(false)}
+        onExport={handleExport}
+        attendeeCount={attendees.length}
+      />
     </div>
   )
 }

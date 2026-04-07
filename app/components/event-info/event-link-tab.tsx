@@ -1,520 +1,143 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from "react"
-import { Copy, Check, Link2, Loader2, Download, ExternalLink } from "lucide-react"
-import { db } from "@/lib/firebase"
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
+import { Copy, Check, Link2, Download, ExternalLink } from "lucide-react"
 import QRCodeStyling from "qr-code-styling"
 
 interface EventLinkTabProps {
-  eventData: {
-    id: string
-    eventName: string
-    createdBy: string
-  }
-  userId: string
-  currentUserId: string
+  eventId: string
 }
 
-const EventLinkTab: React.FC<EventLinkTabProps> = ({ eventData, userId, currentUserId }) => {
-  const [checkingLink, setCheckingLink] = useState(true)
-  const [creating, setCreating] = useState(false)
-  const [existingSlug, setExistingSlug] = useState<string | null>(null)
-  const [linkError, setLinkError] = useState<string | null>(null)
-  const [copiedShort, setCopiedShort] = useState(false)
+const EventLinkTab: React.FC<EventLinkTabProps> = ({ eventId }) => {
+  const [copied, setCopied] = useState(false)
   const qrCodeRef = useRef<HTMLDivElement>(null)
   const qrCodeInstance = useRef<any>(null)
 
-  const origin = "https://spotix.com.ng"
+  const eventUrl = `${process.env.NEXT_PUBLIC_APP_URL}/event/${eventId}`
 
-  // Generate slug from event name
-  const slugFromName = (name: string): string => {
-    if (!name || typeof name !== "string") return ""
-    return name
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/[^\w-]/g, "")
-      .replace(/^-+|-+$/g, "")
-  }
-
-  const slugCandidate = slugFromName(eventData?.eventName || "")
-  const shortlinkUrl = existingSlug ? `${origin}/discover/${existingSlug}` : ""
-
-  // Initialize QR code when shortlink exists
   useEffect(() => {
-    if (existingSlug && qrCodeRef.current && !qrCodeInstance.current) {
-      qrCodeInstance.current = new QRCodeStyling({
-        width: 300,
-        height: 300,
-        data: `${origin}/discover/${existingSlug}`,
-        margin: 10,
-        image: "/full-logo.png",
-        qrOptions: {
-          typeNumber: 0,
-          mode: "Byte",
-          errorCorrectionLevel: "H"
-        },
-        imageOptions: {
-          hideBackgroundDots: true,
-          imageSize: 0.35,
-          margin: 8,
-          crossOrigin: "anonymous"
-        },
-        dotsOptions: {
-          color: "#6b2fa5",
-          type: "rounded"
-        },
-        backgroundOptions: {
-          color: "#ffffff"
-        },
-        cornersSquareOptions: {
-          color: "#6b2fa5",
-          type: "extra-rounded"
-        },
-        cornersDotOptions: {
-          color: "#6b2fa5",
-          type: "dot"
-        }
-      })
+    if (!qrCodeRef.current || qrCodeInstance.current) return
 
-      qrCodeInstance.current.append(qrCodeRef.current)
-    }
+    qrCodeInstance.current = new QRCodeStyling({
+      width: 300,
+      height: 300,
+      data: eventUrl,
+      margin: 10,
+      image: "/full-logo.png",
+      qrOptions: {
+        typeNumber: 0,
+        mode: "Byte",
+        errorCorrectionLevel: "H",
+      },
+      imageOptions: {
+        hideBackgroundDots: true,
+        imageSize: 0.35,
+        margin: 8,
+        crossOrigin: "anonymous",
+      },
+      dotsOptions: {
+        color: "#6b2fa5",
+        type: "rounded",
+      },
+      backgroundOptions: {
+        color: "#ffffff",
+      },
+      cornersSquareOptions: {
+        color: "#6b2fa5",
+        type: "extra-rounded",
+      },
+      cornersDotOptions: {
+        color: "#6b2fa5",
+        type: "dot",
+      },
+    })
 
-    // Update QR code data if slug changes
-    if (qrCodeInstance.current && existingSlug) {
-      qrCodeInstance.current.update({
-        data: `${origin}/discover/${existingSlug}`
-      })
-    }
-  }, [existingSlug, origin])
+    qrCodeInstance.current.append(qrCodeRef.current)
+  }, [eventUrl])
 
-  // Check if shortlink exists on load, and create if it doesn't
-  useEffect(() => {
-    let active = true
-
-    async function checkAndCreateIfNeeded() {
-      setLinkError(null)
-      setCheckingLink(true)
-
-      if (!slugCandidate) {
-        setExistingSlug(null)
-        setCheckingLink(false)
-        return
-      }
-
-      // Validate required data before checking
-      if (!eventData.eventName || !eventData.id || !currentUserId) {
-        setCheckingLink(false)
-        return
-      }
-
-      try {
-        const linkDocRef = doc(db, "Links", slugCandidate)
-        const snapshot = await getDoc(linkDocRef)
-
-        if (!active) return
-
-        if (snapshot.exists()) {
-          // Link already exists, just set it
-          setExistingSlug(slugCandidate)
-          setCheckingLink(false)
-        } else {
-          // Link doesn't exist, create it automatically
-          setCreating(true)
-          
-          const linkData = {
-            slug: slugCandidate,
-            eventName: eventData.eventName,
-            eventId: eventData.id,
-            bookerId: currentUserId,
-            createdAt: serverTimestamp()
-          }
-
-          await setDoc(linkDocRef, linkData)
-
-          // Verify creation
-          const verifyDoc = await getDoc(linkDocRef)
-          if (verifyDoc.exists()) {
-            setExistingSlug(slugCandidate)
-          } else {
-            setLinkError("Failed to verify shortlink creation")
-          }
-          
-          setCreating(false)
-          setCheckingLink(false)
-        }
-      } catch (e: any) {
-        console.error("Error checking/creating shortlink:", e)
-        if (active) {
-          setLinkError(`Failed to check/create shortlink: ${e?.message || "Unknown error"}`)
-          setExistingSlug(null)
-          setCreating(false)
-          setCheckingLink(false)
-        }
-      }
-    }
-
-    checkAndCreateIfNeeded()
-    return () => {
-      active = false
-    }
-  }, [slugCandidate, eventData.eventName, eventData.id, currentUserId])
-
-  const handleCopyShortlink = async () => {
-    if (!shortlinkUrl) return
+  const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(shortlinkUrl)
-      setCopiedShort(true)
-      setTimeout(() => setCopiedShort(false), 2000)
+      await navigator.clipboard.writeText(eventUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
     } catch (error) {
-      console.error("Failed to copy shortlink:", error)
+      console.error("Failed to copy link:", error)
     }
   }
 
   const handleDownloadQR = () => {
-    if (qrCodeInstance.current) {
-      qrCodeInstance.current.download({
-        name: `${slugCandidate}-qr-code`,
-        extension: "png"
-      })
-    }
+    qrCodeInstance.current?.download({
+      name: `spotix-event-${eventId}-qr`,
+      extension: "png",
+    })
   }
 
   return (
-    <div className="event-link-tab">
-      <div className="header-section">
-        <div className="header-content">
-          <h2 className="section-title">Event Shortlink & QR Code</h2>
-          <p className="section-description">
-            Your memorable shortlink and QR code for easy sharing
-          </p>
-        </div>
+    <div className="max-w-2xl mx-auto space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-slate-900">Event Link & QR Code</h2>
+        <p className="text-slate-500 mt-1 text-sm">Share your event link or let attendees scan the QR code</p>
       </div>
 
-      {linkError && (
-        <div className="alert alert-error" role="alert">
-          <span className="alert-icon">⚠️</span>
-          <span>{linkError}</span>
-        </div>
-      )}
-
-      {checkingLink || creating ? (
-        <div className="loading-state">
-          <Loader2 className="spin" size={20} />
-          <span>{creating ? "Creating shortlink..." : "Checking for existing shortlink..."}</span>
-        </div>
-      ) : existingSlug ? (
-        <div className="link-created-section">
-          {/* Shortlink Display */}
-          <div className="shortlink-card">
-            <div className="shortlink-header">
-              <Link2 size={20} className="link-icon" />
-              <h3>Your Event Shortlink</h3>
-            </div>
-            
-            <div className="shortlink-display">
-              <a 
-                href={shortlinkUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="shortlink-url"
-              >
-                {shortlinkUrl}
-                <ExternalLink size={14} className="external-icon" />
-              </a>
-            </div>
-
-            <div className="shortlink-actions">
-              <button
-                className="btn btn-copy"
-                onClick={handleCopyShortlink}
-                type="button"
-              >
-                {copiedShort ? (
-                  <>
-                    <Check size={16} />
-                    <span>Copied!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy size={16} />
-                    <span>Copy Link</span>
-                  </>
-                )}
-              </button>
-            </div>
+      {/* Shortlink Card */}
+      <div className="bg-white rounded-xl border-2 border-slate-200 p-6 shadow-sm space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-[#6b2fa5]/10 rounded-lg">
+            <Link2 size={20} className="text-[#6b2fa5]" />
           </div>
-
-          {/* QR Code Section */}
-          <div className="qr-code-card">
-            <div className="qr-code-header">
-              <h3>QR Code</h3>
-              <p>Scan to view event page</p>
-            </div>
-
-            <div className="qr-code-container">
-              <div ref={qrCodeRef} className="qr-code-wrapper" />
-            </div>
-
-            <button
-              className="btn btn-download"
-              onClick={handleDownloadQR}
-              type="button"
-            >
-              <Download size={16} />
-              <span>Download QR Code</span>
-            </button>
-          </div>
+          <h3 className="text-base font-semibold text-slate-900">Event Link</h3>
         </div>
-      ) : (
-        <div className="create-link-section">
-          <div className="create-card">
-            <p className="no-link-message">
-              Unable to create shortlink. Please ensure all event details are complete.
-            </p>
-          </div>
+
+        <div className="flex items-center gap-2 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl px-4 py-3">
+          <a
+            href={eventUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 text-sm font-mono text-[#6b2fa5] font-medium hover:underline break-all flex items-center gap-2"
+          >
+            {eventUrl}
+            <ExternalLink size={13} className="shrink-0" />
+          </a>
         </div>
-      )}
 
-      <style jsx>{`
-        .event-link-tab {
-          max-width: 900px;
-          margin: 0 auto;
-        }
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl border border-slate-200 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+        >
+          {copied ? (
+            <>
+              <Check size={16} className="text-green-600" />
+              <span className="text-green-600">Copied!</span>
+            </>
+          ) : (
+            <>
+              <Copy size={16} />
+              <span>Copy Link</span>
+            </>
+          )}
+        </button>
+      </div>
 
-        .header-section {
-          margin-bottom: 2rem;
-        }
+      {/* QR Code Card */}
+      <div className="bg-white rounded-xl border-2 border-slate-200 p-6 shadow-sm space-y-5">
+        <div className="text-center">
+          <h3 className="text-base font-semibold text-slate-900">QR Code</h3>
+          <p className="text-sm text-slate-500 mt-0.5">Scan to open the event page</p>
+        </div>
 
-        .section-title {
-          font-size: 1.75rem;
-          font-weight: 700;
-          color: #1e293b;
-          margin: 0 0 0.5rem 0;
-        }
+        <div className="flex justify-center items-center bg-slate-50 rounded-xl p-6 border border-slate-100">
+          <div ref={qrCodeRef} />
+        </div>
 
-        .section-description {
-          color: #64748b;
-          font-size: 1rem;
-          margin: 0;
-        }
-
-        .alert {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding: 1rem;
-          border-radius: 12px;
-          margin-bottom: 1.5rem;
-          font-size: 0.95rem;
-        }
-
-        .alert-error {
-          background: #fef2f2;
-          border: 1px solid #fecaca;
-          color: #991b1b;
-        }
-
-        .alert-icon {
-          font-size: 1.25rem;
-        }
-
-        .loading-state {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.75rem;
-          padding: 3rem;
-          color: #64748b;
-          font-size: 1rem;
-        }
-
-        .spin {
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-
-        .link-created-section {
-          display: grid;
-          gap: 2rem;
-        }
-
-        .shortlink-card,
-        .qr-code-card {
-          background: white;
-          border: 1px solid #e2e8f0;
-          border-radius: 16px;
-          padding: 2rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .shortlink-header {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          margin-bottom: 1.25rem;
-        }
-
-        .link-icon {
-          color: #6b2fa5;
-        }
-
-        .shortlink-header h3,
-        .qr-code-header h3 {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: #1e293b;
-          margin: 0;
-        }
-
-        .shortlink-display {
-          background: #f8fafc;
-          border: 2px dashed #cbd5e1;
-          border-radius: 12px;
-          padding: 1.25rem;
-          margin-bottom: 1rem;
-        }
-
-        .shortlink-url {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-family: 'Monaco', 'Courier New', monospace;
-          color: #6b2fa5;
-          font-size: 1rem;
-          font-weight: 500;
-          text-decoration: none;
-          word-break: break-all;
-        }
-
-        .shortlink-url:hover {
-          text-decoration: underline;
-        }
-
-        .external-icon {
-          flex-shrink: 0;
-        }
-
-        .shortlink-actions {
-          display: flex;
-          gap: 0.75rem;
-        }
-
-        .qr-code-header {
-          text-align: center;
-          margin-bottom: 1.5rem;
-        }
-
-        .qr-code-header p {
-          color: #64748b;
-          font-size: 0.9rem;
-          margin: 0.25rem 0 0 0;
-        }
-
-        .qr-code-container {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          padding: 1.5rem;
-          background: #f8fafc;
-          border-radius: 12px;
-          margin-bottom: 1.5rem;
-        }
-
-        .qr-code-wrapper {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-        }
-
-        .create-link-section {
-          display: flex;
-          justify-content: center;
-          padding: 2rem 0;
-        }
-
-        .create-card {
-          background: white;
-          border: 1px solid #e2e8f0;
-          border-radius: 16px;
-          padding: 3rem 2.5rem;
-          max-width: 500px;
-          width: 100%;
-          text-align: center;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .no-link-message {
-          color: #64748b;
-          font-size: 1rem;
-          margin: 0;
-        }
-
-        .btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
-          padding: 0.75rem 1.5rem;
-          border: none;
-          border-radius: 10px;
-          font-size: 0.95rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          font-family: inherit;
-        }
-
-        .btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .btn-copy {
-          background: #f1f5f9;
-          color: #475569;
-          border: 1px solid #e2e8f0;
-        }
-
-        .btn-copy:hover:not(:disabled) {
-          background: #e2e8f0;
-        }
-
-        .btn-download {
-          width: 100%;
-          background: #f8fafc;
-          color: #475569;
-          border: 1px solid #e2e8f0;
-        }
-
-        .btn-download:hover:not(:disabled) {
-          background: #f1f5f9;
-          border-color: #cbd5e1;
-        }
-
-        @media (max-width: 640px) {
-          .section-title {
-            font-size: 1.5rem;
-          }
-
-          .shortlink-card,
-          .qr-code-card,
-          .create-card {
-            padding: 1.5rem;
-          }
-
-          .btn {
-            font-size: 0.9rem;
-            padding: 0.625rem 1.25rem;
-          }
-        }
-      `}</style>
+        <button
+          onClick={handleDownloadQR}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm rounded-xl border border-slate-200 transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
+        >
+          <Download size={16} />
+          Download QR Code
+        </button>
+      </div>
     </div>
   )
 }

@@ -2,6 +2,9 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { AuthProvider } from "@/hooks/useAuth"
 import "./globals.css"
+import { Nav } from "@/components/nav"
+import { Footer } from "@/components/footer"
+// import "leaflet/dist/leaflet.css"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -90,7 +93,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <div className="min-h-screen flex flex-col">
         <AuthProvider>
+          <Nav />
           {children}
+          <Footer />
         </AuthProvider>
         </div>
       </body>

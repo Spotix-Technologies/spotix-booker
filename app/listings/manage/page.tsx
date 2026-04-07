@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { auth } from "@/lib/firebase"
 import { onAuthStateChanged } from "firebase/auth"
-import { Nav } from "@/components/nav"
+// import { Nav } from "@/components/nav"
 import { ListingCard } from "@/components/listings/listing-card"
 import { useListings } from "@/hooks/use-listings"
 import { Package, Plus, Search, Grid3x3, List, Filter } from "lucide-react"
@@ -49,7 +49,7 @@ export default function ManageListingsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50/30 to-gray-100">
-      <Nav />
+      {/* <Nav /> */}
       
       <div className="container mx-auto px-4 py-12 max-w-7xl">
         {/* Header Section */}

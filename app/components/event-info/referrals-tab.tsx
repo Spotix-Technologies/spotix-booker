@@ -1,9 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { db } from "@/lib/firebase"
-import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore"
-import { Plus, Trash2, X } from "lucide-react"
+import { Plus, Trash2, X, AlertCircle } from "lucide-react"
 
 interface ReferralUsage {
   name: string
@@ -18,117 +16,95 @@ interface ReferralData {
 }
 
 interface ReferralsTabProps {
-  userId: string
   eventId: string
 }
 
-export default function ReferralsTab({ userId, eventId }: ReferralsTabProps) {
+export default function ReferralsTab({ eventId }: ReferralsTabProps) {
   const [referralCode, setReferralCode] = useState("")
   const [referrals, setReferrals] = useState<ReferralData[]>([])
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(true)
   const [selectedReferral, setSelectedReferral] = useState<ReferralData | null>(null)
+  const [codeToDelete, setCodeToDelete] = useState<string | null>(null)
+  const [addError, setAddError] = useState<string | null>(null)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
-  // Fetch all referrals
+  // ── Fetch referrals ──────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchReferrals = async () => {
       setFetching(true)
+      setFetchError(null)
       try {
-        const referralsCollectionRef = collection(db, "events", userId, "userEvents", eventId, "referrals")
-        const snapshot = await getDocs(referralsCollectionRef)
-
-        const referralsData: ReferralData[] = []
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data()
-          referralsData.push({
-            code: docSnap.id,
-            usages: data.usages || [],
-            totalTickets: data.totalTickets || 0,
-          })
-        })
-
-        setReferrals(referralsData)
-      } catch (error) {
-        console.error("Error fetching referrals:", error)
+        const res = await fetch(`/api/event/list/${eventId}/referrals`)
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || "Failed to fetch referrals")
+        setReferrals(data.referrals)
+      } catch (e: any) {
+        console.error("Error fetching referrals:", e)
+        setFetchError(e.message || "Failed to load referral codes")
       } finally {
         setFetching(false)
       }
     }
 
     fetchReferrals()
-  }, [userId, eventId])
+  }, [eventId])
 
+  // ── Add referral ─────────────────────────────────────────────────────────────
   const handleAddReferral = async () => {
-    if (!referralCode.trim()) {
-      alert("Please enter a referral code name")
-      return
-    }
-
-    // Check if referral code already exists
-    if (referrals.some((r) => r.code.toLowerCase() === referralCode.toLowerCase())) {
-      alert("This referral code already exists")
-      return
-    }
-
+    if (!referralCode.trim()) return
+    setAddError(null)
     setLoading(true)
     try {
-      const referralDocRef = doc(db, "events", userId, "userEvents", eventId, "referrals", referralCode)
-      await setDoc(referralDocRef, {
-        usages: [],
-        totalTickets: 0,
+      const res = await fetch(`/api/event/list/${eventId}/referrals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: referralCode.trim() }),
       })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to add referral code")
 
-      setReferrals([
-        ...referrals,
-        {
-          code: referralCode,
-          usages: [],
-          totalTickets: 0,
-        },
-      ])
-
+      setReferrals((prev) => [...prev, data.referral])
       setReferralCode("")
-      alert("Referral code added successfully!")
-    } catch (error) {
-      console.error("Error adding referral:", error)
-      alert("Failed to add referral code. Please try again.")
+    } catch (e: any) {
+      console.error("Error adding referral:", e)
+      setAddError(e.message || "Failed to add referral code")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDeleteReferral = async (code: string) => {
-    if (!confirm(`Are you sure you want to delete the referral code "${code}"?`)) {
-      return
-    }
-
+  // ── Delete referral ──────────────────────────────────────────────────────────
+  const handleDeleteReferral = async () => {
+    if (!codeToDelete) return
     setLoading(true)
     try {
-      const referralDocRef = doc(db, "events", userId, "userEvents", eventId, "referrals", code)
-      await deleteDoc(referralDocRef)
+      const res = await fetch(`/api/event/list/${eventId}/referrals`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: codeToDelete }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to delete referral code")
 
-      setReferrals(referrals.filter((r) => r.code !== code))
-      alert("Referral code deleted successfully!")
-    } catch (error) {
-      console.error("Error deleting referral:", error)
-      alert("Failed to delete referral code. Please try again.")
+      setReferrals((prev) => prev.filter((r) => r.code !== codeToDelete))
+      if (selectedReferral?.code === codeToDelete) setSelectedReferral(null)
+      setCodeToDelete(null)
+    } catch (e: any) {
+      console.error("Error deleting referral:", e)
+      setFetchError(e.message || "Failed to delete referral code")
+      setCodeToDelete(null)
     } finally {
       setLoading(false)
     }
   }
 
+  // ── Format date ──────────────────────────────────────────────────────────────
   const formatDate = (timestamp: any): string => {
     if (!timestamp) return "Unknown"
-
-    if (timestamp && typeof timestamp === "object" && "seconds" in timestamp) {
-      try {
-        const date = new Date(timestamp.seconds * 1000)
-        return date.toLocaleDateString()
-      } catch (error) {
-        return "Invalid date"
-      }
+    if (typeof timestamp === "object" && "seconds" in timestamp) {
+      try { return new Date(timestamp.seconds * 1000).toLocaleDateString() } catch { return "Invalid date" }
     }
-
     return String(timestamp)
   }
 
@@ -141,14 +117,12 @@ export default function ReferralsTab({ userId, eventId }: ReferralsTabProps) {
           <input
             type="text"
             value={referralCode}
-            onChange={(e) => setReferralCode(e.target.value)}
+            onChange={(e) => { setReferralCode(e.target.value); setAddError(null) }}
             placeholder="Enter referral code name"
             className="w-full sm:flex-1 px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#6b2fa5] focus:border-transparent transition-all"
             disabled={loading}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && referralCode.trim()) {
-                handleAddReferral()
-              }
+              if (e.key === "Enter" && referralCode.trim()) handleAddReferral()
             }}
           />
           <button
@@ -160,14 +134,30 @@ export default function ReferralsTab({ userId, eventId }: ReferralsTabProps) {
             <span>Add Code</span>
           </button>
         </div>
+
+        {/* Inline add error */}
+        {addError && (
+          <div className="mt-3 flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>{addError}</span>
+          </div>
+        )}
       </div>
+
+      {/* Fetch error */}
+      {fetchError && (
+        <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">
+          <AlertCircle size={16} className="shrink-0" />
+          <span>{fetchError}</span>
+        </div>
+      )}
 
       {/* Referrals Table */}
       <div>
         <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-4">Referral Codes</h3>
         {fetching ? (
           <div className="text-center py-12">
-            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-[#6b2fa5] border-r-transparent mb-4"></div>
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-[#6b2fa5] border-r-transparent mb-4" />
             <p className="text-slate-600">Loading referral codes...</p>
           </div>
         ) : referrals.length === 0 ? (
@@ -213,7 +203,7 @@ export default function ReferralsTab({ userId, eventId }: ReferralsTabProps) {
                       </td>
                       <td className="px-4 sm:px-6 py-4 text-right">
                         <button
-                          onClick={() => handleDeleteReferral(referral.code)}
+                          onClick={() => setCodeToDelete(referral.code)}
                           disabled={loading}
                           className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
                           title="Delete referral code"
@@ -230,7 +220,41 @@ export default function ReferralsTab({ userId, eventId }: ReferralsTabProps) {
         )}
       </div>
 
-      {/* Modal/Popup for Referral Details */}
+      {/* Delete Confirmation Modal */}
+      {codeToDelete && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 size={22} className="text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 text-center">Delete Referral Code?</h3>
+              <p className="text-sm text-slate-500 text-center mt-2">
+                Are you sure you want to delete{" "}
+                <span className="font-mono font-semibold text-slate-700">{codeToDelete}</span>?
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                onClick={() => setCodeToDelete(null)}
+                className="flex-1 py-2.5 px-4 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteReferral}
+                disabled={loading}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed active:scale-95"
+              >
+                {loading ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Referral Details Modal */}
       {selectedReferral && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200">
@@ -250,7 +274,6 @@ export default function ReferralsTab({ userId, eventId }: ReferralsTabProps) {
 
             {/* Modal Content */}
             <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(85vh-100px)]">
-              {/* Stats */}
               <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-6">
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200 shadow-sm">
                   <p className="text-xs sm:text-sm text-blue-700 font-medium mb-1">Total Uses</p>
@@ -262,7 +285,6 @@ export default function ReferralsTab({ userId, eventId }: ReferralsTabProps) {
                 </div>
               </div>
 
-              {/* Usage Details */}
               <div>
                 <h4 className="text-base sm:text-lg font-bold text-slate-900 mb-4">Usage Details</h4>
                 {selectedReferral.usages.length === 0 ? (

@@ -6,7 +6,7 @@ import { auth } from "@/lib/firebase"
 import { onAuthStateChanged } from "firebase/auth"
 import Link from "next/link"
 import { CreateListingForm } from "@/components/listings/create-listing-form"
-import { Nav } from "@/components/nav"
+// import { Nav } from "@/components/nav"
 import { Package, ArrowRight, Sparkles } from "lucide-react"
 
 export default function ListingsPage() {
@@ -41,7 +41,7 @@ export default function ListingsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50/30 to-gray-100">
-      <Nav />
+      {/* <Nav /> */}
       
       <div className="container mx-auto px-4 py-12 max-w-7xl">
         {/* Header Section */}

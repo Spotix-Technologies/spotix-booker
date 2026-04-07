@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { onAuthStateChanged } from "firebase/auth"
 import { auth, db } from "@/lib/firebase"
 import { doc, getDoc } from "firebase/firestore"
-import { Nav } from "@/components/nav"
+// import { Nav } from "@/components/nav"
 import { Preloader } from "@/components/preloader"
 import { ParticlesBackground } from "@/components/particles-background"
 import { MerchReportsComponent } from "@/components/reports/merch-reports"
@@ -65,7 +65,7 @@ export default function ReportsPage() {
       <ParticlesBackground />
 
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-slate-100">
-        <Nav />
+        {/* <Nav /> */}
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Header */}

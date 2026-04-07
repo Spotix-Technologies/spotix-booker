@@ -8,48 +8,27 @@ import { useRouter } from "next/navigation"
 import { signOut } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { useAuth } from "@/hooks/useAuth"
+import { LogoutDialog } from "@/components/logout-dialog"
 
 export function Nav() {
   const [isOpen, setIsOpen] = useState(false)
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false)
   const { user } = useAuth()
   const router = useRouter()
 
   const toggleMenu = () => setIsOpen((prev) => !prev)
 
-  const handleLogout = async () => {
-    setIsLoggingOut(true)
+  // Called by LogoutDialog after the server-side logout API succeeds.
+  // We still need to clear the Firebase client session here.
+  const handleLogoutComplete = async () => {
+    setIsLogoutDialogOpen(false)
+    setIsOpen(false)
     try {
-      // Step 1: Call server-side logout API to clear session cookies and revoke tokens
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (response.ok) {
-        console.log("✅ Server session cleared successfully")
-      } else {
-        console.warn("⚠️ Server logout failed, but continuing with client logout")
-      }
-    } catch (error) {
-      console.error("❌ Error clearing server session:", error)
-      // Continue with client logout even if server logout fails
-    }
-
-    try {
-      // Step 2: Sign out from Firebase client SDK
       await signOut(auth)
-      console.log("✅ Client session cleared successfully")
     } catch (error) {
       console.error("❌ Error signing out from client:", error)
-    } finally {
-      setIsLoggingOut(false)
-      setIsOpen(false)
-      // Redirect to login page
-      router.push("/login")
     }
+    router.push("/login")
   }
 
   const navItems = [
@@ -63,123 +42,114 @@ export function Nav() {
   ]
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-white/10 bg-white/40 backdrop-blur-2xl backdrop-saturate-150 shadow-xl shadow-black/5">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Top bar */}
-        <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
-          <Link href="/dashboard" className="flex items-center gap-3 group">
-            <div className="relative w-10 h-10 rounded-lg overflow-hidden shadow-md ring-2 ring-[#6b2fa5]/20 group-hover:ring-[#6b2fa5]/40 transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
-              <Image src="/logo.png" alt="Spotix" fill className="object-cover" priority />
-            </div>
-            <span className="hidden sm:inline text-lg font-bold bg-gradient-to-r from-[#6b2fa5] via-[#8b3fc5] to-[#6b2fa5] bg-clip-text text-transparent">
-              Spotix for Bookers
-            </span>
-          </Link>
+    <>
+      <nav className="sticky top-0 z-50 border-b border-white/10 bg-white/40 backdrop-blur-2xl backdrop-saturate-150 shadow-xl shadow-black/5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Top bar */}
+          <div className="flex h-16 items-center justify-between">
+            {/* Logo */}
+            <Link href="/dashboard" className="flex items-center gap-3 group">
+              <div className="relative w-10 h-10 rounded-lg overflow-hidden shadow-md ring-2 ring-[#6b2fa5]/20 group-hover:ring-[#6b2fa5]/40 transition-all duration-300 group-hover:scale-110 group-hover:rotate-3">
+                <Image src="/logo.png" alt="Spotix" fill className="object-cover" priority />
+              </div>
+              <span className="hidden sm:inline text-lg font-bold bg-gradient-to-r from-[#6b2fa5] via-[#8b3fc5] to-[#6b2fa5] bg-clip-text text-transparent">
+                Spotix for Bookers
+              </span>
+            </Link>
 
-          {/* Desktop nav */}
-          <div className="hidden md:flex items-center gap-2">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="px-4 py-2 rounded-lg font-semibold text-slate-700 hover:text-[#6b2fa5] transition-colors"
-              >
-                {item.label}
-              </Link>
-            ))}
-
-            {user ? (
-              <button
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                className="ml-2 flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-white font-semibold hover:bg-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoggingOut ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Logging out...
-                  </>
-                ) : (
-                  <>
-                    <LogOut size={18} />
-                    Logout
-                  </>
-                )}
-              </button>
-            ) : (
-              <Link
-                href="/login"
-                className="ml-2 flex items-center gap-2 rounded-lg bg-[#6b2fa5] px-4 py-2 text-white font-semibold hover:bg-purple-700 transition"
-              >
-                <LogIn size={18} />
-                Login
-              </Link>
-            )}
-          </div>
-
-          {/* Mobile toggle */}
-          <button
-            onClick={toggleMenu}
-            className="md:hidden p-2 rounded-lg text-[#6b2fa5] hover:bg-[#6b2fa5]/10 transition"
-            aria-label="Toggle menu"
-          >
-            {isOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
-
-        {/* MOBILE MENU – SMOOTH HEIGHT ANIMATION */}
-        <div
-          className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out ${
-            isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-          } md:hidden`}
-        >
-          <div className="overflow-hidden">
-            <div className="border-t pt-6 pb-6 space-y-3 max-h-[80vh] overflow-y-auto">
+            {/* Desktop nav */}
+            <div className="hidden md:flex items-center gap-2">
               {navItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={() => setIsOpen(false)}
-                  className="block rounded-lg px-4 py-4 text-base font-semibold text-slate-700 hover:bg-[#6b2fa5]/10 hover:text-[#6b2fa5] transition"
+                  className="px-4 py-2 rounded-lg font-semibold text-slate-700 hover:text-[#6b2fa5] transition-colors"
                 >
                   {item.label}
                 </Link>
               ))}
 
-              {/* Auth action */}
               {user ? (
                 <button
-                  onClick={handleLogout}
-                  disabled={isLoggingOut}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-500 px-4 py-4 text-white font-semibold hover:bg-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setIsLogoutDialogOpen(true)}
+                  className="ml-2 flex items-center gap-2 rounded-lg bg-red-500 px-4 py-2 text-white font-semibold hover:bg-red-600 transition"
                 >
-                  {isLoggingOut ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Logging out...
-                    </>
-                  ) : (
-                    <>
-                      <LogOut size={18} />
-                      Logout
-                    </>
-                  )}
+                  <LogOut size={18} />
+                  Logout
                 </button>
               ) : (
                 <Link
                   href="/login"
-                  onClick={() => setIsOpen(false)}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-[#6b2fa5] px-4 py-4 text-white font-semibold hover:bg-purple-700 transition"
+                  className="ml-2 flex items-center gap-2 rounded-lg bg-[#6b2fa5] px-4 py-2 text-white font-semibold hover:bg-purple-700 transition"
                 >
                   <LogIn size={18} />
                   Login
                 </Link>
               )}
             </div>
+
+            {/* Mobile toggle */}
+            <button
+              onClick={toggleMenu}
+              className="md:hidden p-2 rounded-lg text-[#6b2fa5] hover:bg-[#6b2fa5]/10 transition"
+              aria-label="Toggle menu"
+            >
+              {isOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
+
+          {/* MOBILE MENU */}
+          <div
+            className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out ${
+              isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+            } md:hidden`}
+          >
+            <div className="overflow-hidden">
+              <div className="border-t pt-6 pb-6 space-y-3 max-h-[80vh] overflow-y-auto">
+                {navItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setIsOpen(false)}
+                    className="block rounded-lg px-4 py-4 text-base font-semibold text-slate-700 hover:bg-[#6b2fa5]/10 hover:text-[#6b2fa5] transition"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+
+                {user ? (
+                  <button
+                    onClick={() => {
+                      setIsOpen(false)
+                      setIsLogoutDialogOpen(true)
+                    }}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-500 px-4 py-4 text-white font-semibold hover:bg-red-600 transition"
+                  >
+                    <LogOut size={18} />
+                    Logout
+                  </button>
+                ) : (
+                  <Link
+                    href="/login"
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center justify-center gap-2 rounded-lg bg-[#6b2fa5] px-4 py-4 text-white font-semibold hover:bg-purple-700 transition"
+                  >
+                    <LogIn size={18} />
+                    Login
+                  </Link>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+
+      {/* Logout Dialog — rendered outside nav so it's not clipped */}
+      <LogoutDialog
+        isOpen={isLogoutDialogOpen}
+        onClose={() => setIsLogoutDialogOpen(false)}
+        onLogoutComplete={handleLogoutComplete}
+      />
+    </>
   )
 }

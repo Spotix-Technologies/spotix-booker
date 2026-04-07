@@ -113,7 +113,7 @@ export function EventsSection({ events, userId }: EventsSectionProps) {
                     </td>
                     <td className="px-6 py-4">
                       <Link
-                        href={userId ? `/event-info/${userId}/${event.id}` : `/event/${event.id}`}
+                        href={userId ? `/event-info/${event.id}` : `/event/${event.id}`}
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-[#6b2fa5] to-[#8b4fc5] text-white hover:shadow-lg hover:shadow-[#6b2fa5]/30 hover:scale-105 transition-all duration-300 text-sm font-semibold"
                       >
                         <Eye size={16} />

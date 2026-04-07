@@ -7,7 +7,7 @@ import { auth, db } from "@/lib/firebase"
 import { doc, getDoc } from "firebase/firestore"
 import { Preloader } from "@/components/preloader"
 import { ParticlesBackground } from "@/components/particles-background"
-import { Nav } from "@/components/nav"
+// import { Nav } from "@/components/nav"
 import { ProfileHeader } from "@/components/profile/profile-header"
 import { ProfileStats } from "@/components/profile/profile-stats"
 import { VirtualEventsSection } from "@/components/profile/virtual-events-section"
@@ -112,7 +112,7 @@ export default function ProfilePage() {
       <ParticlesBackground />
 
       <div className="min-h-screen bg-background">
-        <Nav />
+        {/* <Nav /> */}
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {profileData && (

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { ParticlesBackground } from "@/components/particles-background"
-import { Nav } from "@/components/nav"
+// import { Nav } from "@/components/nav"
 import { EventTypeSelector } from "@/components/create-event/event-type-selector"
 import { CreateOneTimeEvent } from "@/components/create-event/create-one-time-event"
 import { CreateEventGroup } from "@/components/create-event/create-event-group"
@@ -19,7 +19,7 @@ export default function CreateEventPage() {
     <>
       <ParticlesBackground />
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-slate-100">
-        <Nav />
+        {/* <Nav /> */}
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {!eventType ? (

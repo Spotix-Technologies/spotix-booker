@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation"
 import { auth, db } from "@/lib/firebase"
 import { onAuthStateChanged } from "firebase/auth"
 import { collection, query, getDocs, doc, getDoc, updateDoc } from "firebase/firestore"
-import { Nav } from "@/components/nav"
+// import { Nav } from "@/components/nav"
 import { Package, ArrowLeft, DollarSign, ShoppingBag, ChevronDown } from "lucide-react"
 import Image from "next/image"
 
@@ -134,7 +134,7 @@ export default function OrderManagementPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50/30 to-gray-100">
-      <Nav />
+      {/* <Nav /> */}
 
       <div className="container mx-auto px-4 py-12 max-w-7xl">
         {/* Back Button */}

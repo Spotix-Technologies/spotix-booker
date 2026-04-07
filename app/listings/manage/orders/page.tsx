@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { auth } from "@/lib/firebase"
 import { onAuthStateChanged } from "firebase/auth"
-import { Nav } from "@/components/nav"
+// import { Nav } from "@/components/nav"
 import { Package, ShoppingBag, AlertCircle, ArrowRight, Image as ImageIcon } from "lucide-react"
 import { useListings } from "@/hooks/use-listings"
 import Image from "next/image"
@@ -42,7 +42,7 @@ export default function OrdersPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-slate-100">
-      <Nav />
+      {/* <Nav /> */}
       
       <div className="container mx-auto px-4 py-12 max-w-7xl">
         {/* Warning Banner */}
