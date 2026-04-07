@@ -11,7 +11,8 @@ import { ParticlesBackground } from "@/components/particles-background"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Mail, Lock, AlertCircle, ArrowRight, Eye, EyeOff } from "lucide-react"
 import Image from "next/image"
-import { storeAccessToken, getDeviceId, collectDeviceMeta } from "@/lib/auth-client"
+import { storeAccessToken, getDeviceId, collectDeviceMeta, tryRefreshTokens, getAccessToken } from "@/lib/auth-client"
+import { useEffect } from "react"
 
 export default function LoginClient() {
   const router = useRouter()
@@ -22,7 +23,36 @@ export default function LoginClient() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
-  const redirect = searchParams.get("redirect") || "/"
+  // Attempt silent refresh on mount — if successful, redirect to dashboard
+  useEffect(() => {
+    const attemptSilentRefresh = async () => {
+      try {
+        // If we already have an access token, attempt to refresh it
+        if (getAccessToken()) {
+          const refreshed = await tryRefreshTokens()
+          if (refreshed) {
+            console.log("✅ Silent refresh successful — redirecting to dashboard")
+            router.push("/dashboard")
+          }
+        }
+      } catch (err) {
+        console.warn("Silent refresh failed (expected if not logged in):", err)
+      }
+    }
+
+    attemptSilentRefresh()
+  }, [router])
+
+  // Validate and normalize redirect URL — prevent open redirects
+  const validateRedirect = (url: string): string => {
+    if (!url || url === "/" || !url.startsWith("/")) {
+      return "/dashboard"
+    }
+    return url
+  }
+
+  const rawRedirect = searchParams.get("redirect") || ""
+  const redirect = validateRedirect(rawRedirect)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -83,10 +113,11 @@ export default function LoginClient() {
       if (!isBooker) {
         console.warn("⚠️ User is not a booker — redirecting to /not-booker")
         router.push("/not-booker")
-      } else {
-        console.log("✅ Redirecting to:", redirect)
-        router.push(redirect)
+        return
       }
+
+      console.log("✅ Redirecting to:", redirect)
+      router.push(redirect)
     } catch (err: any) {
       console.error("Login error:", err)
 

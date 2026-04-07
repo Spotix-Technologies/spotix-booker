@@ -217,11 +217,35 @@ export async function authFetch(
   return response;
 }
 
+// ── Cache busting helpers ────────────────────────────────────────────────────
+
+/**
+ * Clear all dashboard and events caches from localStorage.
+ * Call this on logout to prevent stale data after re-login.
+ */
+export function bustAllCaches(): void {
+  if (typeof window === "undefined") return
+
+  try {
+    // Bust dashboard caches — keys follow pattern: spotix_dashboard_${userId}
+    const allKeys = Object.keys(localStorage)
+    for (const key of allKeys) {
+      if (key.startsWith("spotix_dashboard_") || key.startsWith("spotix_events_")) {
+        localStorage.removeItem(key)
+      }
+    }
+    console.log("[auth-client] Cache busted on logout")
+  } catch {
+    // ignore storage errors
+  }
+}
+
 // ── Logout ─────────────────────────────────────────────────────────────────────
 
 /**
  * Log out from the current device.
  * Server revokes the Firestore refresh token and clears all cookies.
+ * Also busts all dashboard/events caches to prevent stale data after re-login.
  */
 export async function logout(redirectTo = "/login"): Promise<void> {
   try {
@@ -230,10 +254,42 @@ export async function logout(redirectTo = "/login"): Promise<void> {
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ allDevices: false }),
-    });
+    })
   } catch {
     // Best-effort
   }
+
+  clearAccessToken()
+  bustAllCaches()
+
+  if (typeof window !== "undefined") {
+    window.location.href = redirectTo
+  }
+}
+
+/**
+ * Log out from all devices.
+ * Also busts all dashboard/events caches to prevent stale data after re-login.
+ */
+export async function logoutAllDevices(redirectTo = "/login"): Promise<void> {
+  try {
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ allDevices: true }),
+    })
+  } catch {
+    // Best-effort
+  }
+
+  clearAccessToken()
+  bustAllCaches()
+
+  if (typeof window !== "undefined") {
+    window.location.href = redirectTo
+  }
+}
 
   clearAccessToken();
 

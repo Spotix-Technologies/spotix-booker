@@ -3,10 +3,32 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
   try {
+    // Defensive check: Verify that middleware has injected auth headers
+    // (middleware validates the token and injects x-user-id)
+    const xUserId = request.headers.get("x-user-id")
+    if (!xUserId) {
+      console.warn(
+        "[api/profile/bvt] Missing x-user-id header — middleware may have failed to authenticate"
+      )
+      return NextResponse.json(
+        { error: "Unauthorized", message: "Missing authentication headers" },
+        { status: 401 }
+      )
+    }
+
     const userId = request.nextUrl.searchParams.get("userId")
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 })
+    }
+
+    // Ensure the requesting user matches the requested userId (prevent cross-user data access)
+    if (xUserId !== userId) {
+      console.warn(`[api/profile/bvt] User ${xUserId} attempted to access data for ${userId}`)
+      return NextResponse.json(
+        { error: "Forbidden", message: "You can only access your own data" },
+        { status: 403 }
+      )
     }
 
     const userRef = adminDb.collection("users").doc(userId)

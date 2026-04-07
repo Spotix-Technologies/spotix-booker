@@ -8,12 +8,8 @@ export default function Home() {
   const router = useRouter()
 
   useEffect(() => {
-    // Redirect to dashboard after 5 seconds
-    const timer = setTimeout(() => {
-      router.push("/dashboard")
-    }, 6000)
-
-    return () => clearTimeout(timer)
+    // Redirect to dashboard immediately (middleware protects unauthorized access)
+    router.push("/dashboard")
   }, [router])
 
   return (
