@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, createContext, useContext, ReactNode, createElement } from "react"
-import { authFetch, getAccessToken } from "@/lib/auth-client"
+import { authFetch, getAccessToken, tryRefreshTokens, clearAccessToken } from "@/lib/auth-client"
 
 type User = {
   id: string
@@ -18,19 +18,40 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Global event emitter for auth changes
+let authRefreshListeners: Array<() => void> = []
+
+export function triggerAuthRefresh() {
+  authRefreshListeners.forEach(callback => callback())
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     const initializeAuth = async () => {
-      // Check if we have a valid access token (set by middleware)
-      if (!getAccessToken()) {
-        setLoading(false)
-        return
-      }
-
       try {
+        // Check if we have an access token in memory
+        let token = getAccessToken()
+        
+        // If not in memory, try to refresh from the httpOnly cookie
+        if (!token) {
+          const refreshed = await tryRefreshTokens()
+          if (!refreshed) {
+            // No valid session
+            setLoading(false)
+            return
+          }
+          token = getAccessToken()
+        }
+
+        if (!token) {
+          setLoading(false)
+          return
+        }
+
         // Fetch user data from our custom auth API
         const response = await authFetch("/api/user/me")
         if (response.ok) {
@@ -42,6 +63,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             fullName: userData.fullName,
             isBooker: userData.isBooker,
           })
+        } else if (response.status === 401) {
+          // Token is invalid, clear it
+          clearAccessToken()
+          setUser(null)
         }
       } catch (err) {
         console.error("Failed to initialize auth:", err)
@@ -51,6 +76,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     initializeAuth()
+  }, [refreshKey])
+
+  // Listen for manual auth refresh triggers (e.g., after login)
+  useEffect(() => {
+    const handleAuthRefresh = () => {
+      setRefreshKey(prev => prev + 1)
+    }
+
+    authRefreshListeners.push(handleAuthRefresh)
+
+    return () => {
+      authRefreshListeners = authRefreshListeners.filter(cb => cb !== handleAuthRefresh)
+    }
   }, [])
 
   return createElement(

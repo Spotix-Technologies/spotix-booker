@@ -100,8 +100,8 @@ export async function GET(request: NextRequest) {
         eventName: d.eventName || "Unnamed Event",
         eventDate: d.eventDate,
         ticketsSold: d.ticketsSold || 0,
-        revenue: d.revenue || 0,
-        availableBalance: d.availableRevenue ?? (d.revenue || 0) - (d.paidOut || 0),
+        revenue: d.totalRevenue || 0,
+        availableBalance: d.availableRevenue ?? (d.totalRevenue || 0) - (d.totalPaidOut || 0),
         status: d.status || "inactive",
       })
     }
