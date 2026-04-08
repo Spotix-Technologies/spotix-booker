@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { authFetch, getAccessToken } from "@/lib/auth-client"
+import { authFetch } from "@/lib/auth-client"
+import { useProtectedPage } from "@/hooks/useProtectedPage"
 import { Preloader } from "@/components/preloader"
 import { ParticlesBackground } from "@/components/particles-background"
 // import { Nav } from "@/components/nav"
@@ -33,20 +34,15 @@ interface ProfileData {
 
 export default function ProfilePage() {
   const router = useRouter()
+  useProtectedPage()
+  
   const [loading, setLoading] = useState(true)
   const [profileData, setProfileData] = useState<ProfileData | null>(null)
-  const [authChecked, setAuthChecked] = useState(false)
 
   useEffect(() => {
-    // Check if we have a valid access token (middleware already validated it)
-    if (!getAccessToken()) {
-      router.push("/login")
-      return
-    }
-
     const loadProfileData = async () => {
       try {
-        // Fetch user data from the API (protected by middleware + authFetch)
+        // Fetch user data from the API (protected by authFetch)
         const userResponse = await authFetch("/api/user/me")
         if (!userResponse.ok) {
           router.push("/login")
@@ -88,8 +84,6 @@ export default function ProfilePage() {
           bvt: bvtData.bvt || "",
           enabledCollaboration: userData.enabledCollaboration || false,
         })
-
-        setAuthChecked(true)
       } catch (err) {
         console.error("Profile load error:", err)
         router.push("/login")
@@ -100,10 +94,6 @@ export default function ProfilePage() {
 
     loadProfileData()
   }, [router])
-
-  if (!authChecked) {
-    return <Preloader isLoading={true} />
-  }
 
   return (
     <>

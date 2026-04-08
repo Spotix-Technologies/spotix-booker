@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { authFetch, getAccessToken } from "@/lib/auth-client"
+import { authFetch } from "@/lib/auth-client"
+import { useProtectedPage } from "@/hooks/useProtectedPage"
 // import { Nav } from "@/components/nav"
 import { Preloader } from "@/components/preloader"
 import { ParticlesBackground } from "@/components/particles-background"
@@ -47,8 +48,8 @@ function bustCache(userId: string) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function EventsPage() {
   const router = useRouter()
+  useProtectedPage()
 
-  const [authChecked, setAuthChecked]         = useState(false)
   const [userId, setUserId]                   = useState<string | null>(null)
   const [events, setEvents]                   = useState<EventData[]>([])
   const [collaboratedEvents, setCollaborated] = useState<CollaboratedEventData[]>([])
@@ -58,15 +59,8 @@ export default function EventsPage() {
   const [searchQuery, setSearchQuery]         = useState("")
   const [statusFilter, setStatusFilter]       = useState("all")
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
+  // ── Fetch user ID after auth is confirmed ──────────────────────────────────
   useEffect(() => {
-    // Check if we have a valid access token (middleware already validated it)
-    if (!getAccessToken()) {
-      router.push("/login")
-      return
-    }
-
-    // Fetch user ID from the API
     const initializeAuth = async () => {
       try {
         const userResponse = await authFetch("/api/user/me")
@@ -84,7 +78,6 @@ export default function EventsPage() {
         }
 
         setUserId(uid)
-        setAuthChecked(true)
       } catch (err) {
         console.error("Auth initialization error:", err)
         router.push("/login")
@@ -177,8 +170,6 @@ export default function EventsPage() {
   const cachedTimeLabel = cachedAt
     ? new Date(cachedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
     : null
-
-  if (!authChecked) return <Preloader isLoading={true} />
 
   return (
     <>

@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { authFetch, getAccessToken } from "@/lib/auth-client"
+import { authFetch } from "@/lib/auth-client"
+import { useProtectedPage } from "@/hooks/useProtectedPage"
 import { Preloader } from "@/components/preloader"
 import { ParticlesBackground } from "@/components/particles-background"
 // import { Nav } from "@/components/nav"
@@ -84,6 +85,8 @@ function bustCache(userId: string) {
 
 export default function DashboardPage() {
   const router = useRouter()
+  useProtectedPage()
+  
   const [loading, setLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -94,16 +97,9 @@ export default function DashboardPage() {
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [servedFromCache, setServedFromCache] = useState(false)
 
-  // ── Auth check ───────────────────────────────────────────────────────────────
+  // ── Fetch user ID after auth is confirmed ────────────────────────────────────
 
   useEffect(() => {
-    // Check if we have a valid access token (middleware already validated it)
-    if (!getAccessToken()) {
-      router.push("/login")
-      return
-    }
-
-    // Fetch user ID from the API
     const initializeAuth = async () => {
       try {
         const userResponse = await authFetch("/api/user/me")
