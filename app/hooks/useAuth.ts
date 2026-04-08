@@ -1,27 +1,94 @@
 "use client"
 
 import { useEffect, useState, createContext, useContext, ReactNode, createElement } from "react"
-import { onAuthStateChanged, User } from "firebase/auth"
-import { auth } from "@/lib/firebase" // adjust path if needed
+import { authFetch, getAccessToken, tryRefreshTokens, clearAccessToken } from "@/lib/auth-client"
+
+type User = {
+  id: string
+  uid: string
+  email: string
+  fullName?: string
+  isBooker?: boolean
+} | null
 
 type AuthContextType = {
-  user: User | null
+  user: User
   loading: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Global event emitter for auth changes
+let authRefreshListeners: Array<() => void> = []
+
+export function triggerAuthRefresh() {
+  authRefreshListeners.forEach(callback => callback())
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<User>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser)
-      setLoading(false)
-    })
+    const initializeAuth = async () => {
+      try {
+        // Check if we have an access token in memory
+        let token = getAccessToken()
+        
+        // If not in memory, try to refresh from the httpOnly cookie
+        if (!token) {
+          const refreshed = await tryRefreshTokens()
+          if (!refreshed) {
+            // No valid session
+            setLoading(false)
+            return
+          }
+          token = getAccessToken()
+        }
 
-    return () => unsubscribe()
+        if (!token) {
+          setLoading(false)
+          return
+        }
+
+        // Fetch user data from our custom auth API
+        const response = await authFetch("/api/user/me")
+        if (response.ok) {
+          const userData = await response.json()
+          setUser({
+            id: userData.uid || userData.id,
+            uid: userData.uid || userData.id,
+            email: userData.email,
+            fullName: userData.fullName,
+            isBooker: userData.isBooker,
+          })
+        } else if (response.status === 401) {
+          // Token is invalid, clear it
+          clearAccessToken()
+          setUser(null)
+        }
+      } catch (err) {
+        console.error("Failed to initialize auth:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    initializeAuth()
+  }, [refreshKey])
+
+  // Listen for manual auth refresh triggers (e.g., after login)
+  useEffect(() => {
+    const handleAuthRefresh = () => {
+      setRefreshKey(prev => prev + 1)
+    }
+
+    authRefreshListeners.push(handleAuthRefresh)
+
+    return () => {
+      authRefreshListeners = authRefreshListeners.filter(cb => cb !== handleAuthRefresh)
+    }
   }, [])
 
   return createElement(
