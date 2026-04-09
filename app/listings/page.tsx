@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { tryRefreshTokens, getAccessToken } from "@/lib/auth-client"
 import { auth } from "@/lib/firebase"
 import { onAuthStateChanged } from "firebase/auth"
 import Link from "next/link"
@@ -15,15 +16,38 @@ export default function ListingsPage() {
   const router = useRouter()
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (!currentUser) {
+    const initializeAuth = async () => {
+      try {
+        // Attempt token refresh if not in memory
+        let token = getAccessToken()
+        if (!token) {
+          const refreshed = await tryRefreshTokens()
+          if (!refreshed) {
+            router.push("/login")
+            setLoading(false)
+            return
+          }
+        }
+      } catch (err) {
+        console.error("Auth initialization error:", err)
         router.push("/login")
-      } else {
-        setUser(currentUser)
+        setLoading(false)
+        return
       }
-      setLoading(false)
-    })
-    return () => unsubscribe()
+
+      // Also check Firebase auth
+      const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        if (!currentUser) {
+          router.push("/login")
+        } else {
+          setUser(currentUser)
+        }
+        setLoading(false)
+      })
+      return () => unsubscribe()
+    }
+
+    initializeAuth()
   }, [router])
 
 

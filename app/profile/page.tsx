@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { authFetch, getAccessToken } from "@/lib/auth-client"
+import { authFetch, getAccessToken, tryRefreshTokens } from "@/lib/auth-client"
 import { Preloader } from "@/components/preloader"
 import { ParticlesBackground } from "@/components/particles-background"
 // import { Nav } from "@/components/nav"
@@ -38,14 +38,25 @@ export default function ProfilePage() {
   const [authChecked, setAuthChecked] = useState(false)
 
   useEffect(() => {
-    // Check if we have a valid access token (middleware already validated it)
-    if (!getAccessToken()) {
-      router.push("/login")
-      return
-    }
-
     const loadProfileData = async () => {
       try {
+        // Initialize auth — attempt token refresh if not in memory
+        let token = getAccessToken()
+        
+        if (!token) {
+          const refreshed = await tryRefreshTokens()
+          if (!refreshed) {
+            router.push("/login")
+            return
+          }
+          token = getAccessToken()
+        }
+
+        if (!token) {
+          router.push("/login")
+          return
+        }
+
         // Fetch user data from the API (protected by middleware + authFetch)
         const userResponse = await authFetch("/api/user/me")
         if (!userResponse.ok) {

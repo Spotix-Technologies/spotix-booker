@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { authFetch, getAccessToken } from "@/lib/auth-client"
+import { authFetch, getAccessToken, tryRefreshTokens } from "@/lib/auth-client"
 import { Preloader } from "@/components/preloader"
 import { ParticlesBackground } from "@/components/particles-background"
 // import { Nav } from "@/components/nav"
@@ -97,15 +97,28 @@ export default function DashboardPage() {
   // ── Auth check ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    // Check if we have a valid access token (middleware already validated it)
-    if (!getAccessToken()) {
-      router.push("/login")
-      return
-    }
-
-    // Fetch user ID from the API
+    // Initialize auth — attempt token refresh if not in memory
     const initializeAuth = async () => {
       try {
+        let token = getAccessToken()
+        
+        // If not in memory, try to refresh from the httpOnly cookie
+        if (!token) {
+          const refreshed = await tryRefreshTokens()
+          if (!refreshed) {
+            // No valid session
+            router.push("/login")
+            return
+          }
+          token = getAccessToken()
+        }
+
+        if (!token) {
+          router.push("/login")
+          return
+        }
+
+        // Fetch user ID from the API
         const userResponse = await authFetch("/api/user/me")
         if (!userResponse.ok) {
           router.push("/login")
