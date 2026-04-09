@@ -75,8 +75,11 @@ async function resolveOwnedEvent(
 }
 
 // ─── Timestamp helpers ────────────────────────────────────────────────────────
-function tsToDateString(ts: FirebaseFirestore.Timestamp | null | undefined): string {
+function tsToDateString(ts: FirebaseFirestore.Timestamp | string | null | undefined): string {
   if (!ts) return "Unknown"
+  // Handle string dates (already formatted)
+  if (typeof ts === "string") return ts
+  // Handle Firestore Timestamp objects
   try { return ts.toDate().toLocaleDateString() } catch { return "Unknown" }
 }
 
@@ -390,7 +393,7 @@ export async function PATCH(
     }
   }
 
-  // ── action: toggleDiscount ─────────────────────────────────────────���──────
+  // ── action: toggleDiscount ──���──────────────────────────────────────���──────
   if (action === "toggleDiscount") {
     const { discountId } = body
     if (!discountId) return fail("discountId is required", 400)
