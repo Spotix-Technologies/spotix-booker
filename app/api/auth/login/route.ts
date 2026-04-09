@@ -55,6 +55,12 @@ export async function POST(request: NextRequest) {
       return err("INVALID_INPUT", "Device information is required", 400)
     }
 
+    // Check if Firebase Admin SDK is initialized
+    if (!adminDb) {
+      console.error("Firebase Admin SDK not initialized — missing credentials")
+      return err("SERVER_ERROR", "Authentication service misconfigured. Missing Firebase credentials.", 500)
+    }
+
     // Use Firebase Admin SDK to authenticate the user
     // Note: Firebase Admin SDK doesn't have a direct way to authenticate with email/password
     // instead, we need to use the Firebase REST API or store credentials securely
@@ -65,7 +71,7 @@ export async function POST(request: NextRequest) {
     const firebaseApiKey = process.env.FIREBASE_API_KEY
     if (!firebaseApiKey) {
       console.error("Missing FIREBASE_API_KEY environment variable")
-      return err("SERVER_ERROR", "Authentication service misconfigured", 500)
+      return err("SERVER_ERROR", "Authentication service misconfigured. Missing FIREBASE_API_KEY.", 500)
     }
 
     let userId: string

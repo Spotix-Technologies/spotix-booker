@@ -51,6 +51,12 @@ function err(error: string, message: string, status: number) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if Firebase Admin SDK is initialized
+    if (!adminDb) {
+      console.error("Firebase Admin SDK not initialized — missing credentials");
+      return err("ServiceUnavailable", "Authentication service temporarily unavailable", 503);
+    }
+
     // ── 1. Read refresh token data from httpOnly cookies ─────────────────────
     //    These are automatically sent by the browser because the cookies are
     //    scoped to Path=/api/auth/refresh. Client JS cannot read them.

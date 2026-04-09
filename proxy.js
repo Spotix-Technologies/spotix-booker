@@ -1,7 +1,5 @@
-import { NextRequest, NextResponse } from "next/server"
-
 /**
- * middleware.ts
+ * proxy.js (Next.js 16+ format for middleware)
  *
  * Enforces session validation on protected routes.
  * Automatically attempts to refresh the access token if needed.
@@ -27,19 +25,19 @@ const PUBLIC_ROUTES = [
   "/",
 ]
 
-export async function middleware(request: NextRequest) {
+export default function middleware(request) {
   const { pathname } = request.nextUrl
 
   // Allow public routes and API routes to pass through
   if (PUBLIC_ROUTES.some((route) => pathname === route) || pathname.startsWith("/api/")) {
-    return NextResponse.next()
+    return request
   }
 
   // Check if this is a protected route
   const isProtected = PROTECTED_ROUTES.some((route) => pathname.startsWith(route))
 
   if (!isProtected) {
-    return NextResponse.next()
+    return request
   }
 
   // For protected routes, check if the refresh token cookie exists
@@ -50,17 +48,16 @@ export async function middleware(request: NextRequest) {
   // The access token will be refreshed on the client via tryRefreshTokens()
   if (refreshToken) {
     // Session is valid, allow the request
-    return NextResponse.next()
+    return request
   }
 
   // No refresh token — user is not authenticated
   // Redirect to login with the current path as the redirect target
   const loginUrl = new URL("/login", request.url)
   loginUrl.searchParams.set("redirect", pathname)
-  return NextResponse.redirect(loginUrl)
+  return Response.redirect(loginUrl)
 }
 
-// Configure which routes the middleware should run on
 export const config = {
   matcher: [
     /*
