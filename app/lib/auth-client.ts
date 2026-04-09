@@ -167,7 +167,11 @@ export async function tryRefreshTokens(): Promise<boolean> {
  * Drop-in replacement for fetch() that:
  *   1. Proactively refreshes the access token if it's expired or about to expire
  *   2. Injects the current access token as a Bearer header
- *   3. On unexpected 401, retries once after a refresh attempt
+ *   3. On unexpected 401, silently retries once after a refresh attempt
+ *
+ * NOTE: This does NOT redirect to login automatically. Callers should check
+ * the response status and handle 401/403 as needed. The page-level auth check
+ * (in useEffect) will redirect when truly logged out.
  *
  * Usage:
  *   const res = await authFetch("/api/some-protected-route")
@@ -178,15 +182,9 @@ export async function authFetch(
 ): Promise<Response> {
   // Proactive refresh before token actually expires
   if (isAccessTokenExpired()) {
-    const refreshed = await tryRefreshTokens();
-    if (!refreshed) {
-      // Refresh failed — redirect to login
-      if (typeof window !== "undefined") {
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-      }
-      // Return a synthetic 401 so callers don't have to handle undefined
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-    }
+    await tryRefreshTokens();
+    // Don't bail out on refresh failure — let the actual API call attempt
+    // and handle 401 reactively. This allows the caller to decide what to do.
   }
 
   const withAuth = (): RequestInit => ({
@@ -202,16 +200,14 @@ export async function authFetch(
   let response = await fetch(input, withAuth());
 
   // Reactive refresh on unexpected 401 (e.g. clock skew or near-expiry race)
+  // Only retry once to avoid infinite loops
   if (response.status === 401) {
     const refreshed = await tryRefreshTokens();
     if (refreshed) {
+      // Token was refreshed, retry the request
       response = await fetch(input, withAuth());
-    } else {
-      clearAccessToken();
-      if (typeof window !== "undefined") {
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-      }
     }
+    // If refresh still fails, return the 401 response and let the caller handle it
   }
 
   return response;
@@ -289,4 +285,48 @@ export async function logoutAllDevices(redirectTo = "/login"): Promise<void> {
   if (typeof window !== "undefined") {
     window.location.href = redirectTo
   }
+}
+
+// ── Cross-tab auth state sync ──────────────────────────────────────────────────
+
+/**
+ * Listen for auth state changes and sync across browser tabs.
+ * Call this once on app startup (e.g., in the NavBar or root layout).
+ *
+ * Uses storage events to detect when another tab logs out, then syncs state here.
+ */
+export function setupAuthStateListener(): void {
+  if (typeof window === "undefined") return
+
+  // Listen for logout in other tabs
+  window.addEventListener("storage", (event) => {
+    if (event.key === KEYS.deviceId && !event.newValue) {
+      // Device ID was cleared — another tab logged out
+      clearAccessToken()
+      bustAllCaches()
+      // Redirect to login
+      window.location.href = "/login"
+    }
+
+    // Also detect if spotix_at_expiry is cleared (access token cleared)
+    if (event.key === KEYS.atExpiry && !event.newValue) {
+      clearAccessToken()
+    }
+  })
+
+  // Optional: Periodically validate session is still alive
+  // If refresh token is gone, clear local state
+  const validateSessionInterval = setInterval(() => {
+    const rt = document.cookie.includes("spotix_rt=")
+    if (!rt && getAccessToken()) {
+      // Refresh token gone but we still have access token in memory
+      // This means session was revoked server-side
+      clearAccessToken()
+      bustAllCaches()
+      window.location.href = "/login"
+    }
+  }, 60_000) // Check every 60 seconds
+
+  // Cleanup on unmount (won't actually unmount in global listener, but good practice)
+  return () => clearInterval(validateSessionInterval)
 }

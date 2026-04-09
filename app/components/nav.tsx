@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Menu, X, LogOut, LogIn } from "lucide-react"
-import { logout } from "@/lib/auth-client"
+import { logout, setupAuthStateListener } from "@/lib/auth-client"
 import { useAuth } from "@/hooks/useAuth"
 import { LogoutDialog } from "@/components/logout-dialog"
 
@@ -12,6 +12,11 @@ export function Nav() {
   const [isOpen, setIsOpen] = useState(false)
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false)
   const { user, loading } = useAuth()
+
+  // Setup auth state listener to sync logout across tabs
+  useEffect(() => {
+    setupAuthStateListener()
+  }, [])
 
   const toggleMenu = () => setIsOpen((prev) => !prev)
 
