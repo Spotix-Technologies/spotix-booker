@@ -13,6 +13,8 @@ interface AttendeeData {
   purchaseDate: string
   purchaseTime: string
   ticketReference: string
+  facialEnroll: "enrolled" | "unenrolled"
+  faceEmbedding?: number[] | null
 }
 
 interface AttendeesTabProps {
@@ -47,12 +49,14 @@ export default function AttendeesTab({ attendees, formatFirestoreTimestamp, even
   }
 
   const handleExport = (format: "json" | "csv") => {
-    // Always export all attendees, mapped to the 4 required fields
+    // Export all attendees with facial data if available
     const exportData = attendees.map((a) => ({
       fullName: a.fullName,
       email: a.email,
       ticketId: a.id,
       ticketType: a.ticketType,
+      facialEnroll: a.facialEnroll,
+      ...(a.faceEmbedding ? { faceEmbedding: a.faceEmbedding } : {}),
     }))
 
     const fileName = `spotix_${eventId}`
@@ -61,9 +65,17 @@ export default function AttendeesTab({ attendees, formatFirestoreTimestamp, even
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" })
       triggerDownload(blob, `${fileName}.json`)
     } else {
-      const headers = ["fullName", "email", "ticketId", "ticketType"]
+      // For CSV, we need to handle the array field carefully
+      const headers = ["fullName", "email", "ticketId", "ticketType", "facialEnroll", "faceEmbedding"]
       const rows = exportData.map((row) =>
-        headers.map((h) => `"${String(row[h as keyof typeof row]).replace(/"/g, '""')}"`).join(",")
+        headers.map((h) => {
+          const value = row[h as keyof typeof row]
+          if (Array.isArray(value)) {
+            // For face embedding array, output as pipe-separated values
+            return `"${(value as number[]).join("|")}"`
+          }
+          return `"${String(value ?? "").replace(/"/g, '""')}"`
+        }).join(",")
       )
       const csv = [headers.join(","), ...rows].join("\n")
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
@@ -165,6 +177,7 @@ export default function AttendeesTab({ attendees, formatFirestoreTimestamp, even
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Email</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Ticket Type</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Purchase Date</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Facial Enroll</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">Status</th>
               </tr>
             </thead>
@@ -208,6 +221,17 @@ export default function AttendeesTab({ attendees, formatFirestoreTimestamp, even
                     <td className="px-6 py-4">
                       <span
                         className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                          attendee.facialEnroll === "enrolled"
+                            ? "bg-blue-50 text-blue-700 border border-blue-200"
+                            : "bg-slate-50 text-slate-700 border border-slate-200"
+                        }`}
+                      >
+                        {attendee.facialEnroll === "enrolled" ? "✓ Enrolled" : "○ Unenrolled"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${
                           attendee.verified 
                             ? "bg-green-50 text-green-700 border border-green-200" 
                             : "bg-amber-50 text-amber-700 border border-amber-200"
@@ -220,7 +244,7 @@ export default function AttendeesTab({ attendees, formatFirestoreTimestamp, even
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-16 text-center">
+                  <td colSpan={7} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
                         <User size={32} className="text-slate-400" />

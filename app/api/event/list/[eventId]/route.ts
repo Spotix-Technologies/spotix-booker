@@ -130,6 +130,8 @@ export async function GET(
       purchaseDate: tsToDateString(a.purchaseDate),
       purchaseTime: a.purchaseTime ?? tsToTimeString(a.purchaseDate),
       ticketReference: a.ticketReference ?? "Unknown",
+      facialEnroll: a.faceEmbedding ? "enrolled" : "unenrolled",
+      faceEmbedding: a.faceEmbedding ?? null,
     }
   })
 
@@ -388,7 +390,7 @@ export async function PATCH(
     }
   }
 
-  // ── action: toggleDiscount ────────────────────────────────────────────────
+  // ── action: toggleDiscount ─────────────────────────────────────────���──────
   if (action === "toggleDiscount") {
     const { discountId } = body
     if (!discountId) return fail("discountId is required", 400)

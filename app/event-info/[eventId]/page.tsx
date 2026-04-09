@@ -64,6 +64,8 @@ interface AttendeeData {
   purchaseDate: string
   purchaseTime: string
   ticketReference: string
+  facialEnroll: "enrolled" | "unenrolled"
+  faceEmbedding?: number[] | null
 }
 
 interface PayoutData {
@@ -548,7 +550,9 @@ export default function EventInfoPage({
               loadedTabs.has("attendees") ? (
                 <AttendeesTab
                   attendees={attendees}
-                  formatFirestoreTimestamp={(ts: any) => String(ts)} eventId={""}                />
+                  formatFirestoreTimestamp={(ts: any) => ts}
+                  eventId={eventId}
+                />
               ) : <TabSkeleton />
             )}
 
