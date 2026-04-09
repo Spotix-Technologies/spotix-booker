@@ -316,7 +316,7 @@ export function setupAuthStateListener(): void {
 
   // Optional: Periodically validate session is still alive
   // If refresh token is gone, clear local state
-  const validateSessionInterval = setInterval(() => {
+  setInterval(() => {
     const rt = document.cookie.includes("spotix_rt=")
     if (!rt && getAccessToken()) {
       // Refresh token gone but we still have access token in memory
@@ -326,7 +326,4 @@ export function setupAuthStateListener(): void {
       window.location.href = "/login"
     }
   }, 60_000) // Check every 60 seconds
-
-  // Cleanup on unmount (won't actually unmount in global listener, but good practice)
-  return () => clearInterval(validateSessionInterval)
 }
