@@ -21,8 +21,30 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 // Global event emitter for auth changes
 let authRefreshListeners: Array<() => void> = []
 
+// Auth initialization promise — resolves when AuthProvider finishes first initialization
+let authInitResolvers: Array<() => void> = []
+let authInitialized = false
+
 export function triggerAuthRefresh() {
   authRefreshListeners.forEach(callback => callback())
+}
+
+export function isAuthInitialized(): boolean {
+  return authInitialized
+}
+
+/**
+ * Returns a promise that resolves when AuthProvider finishes its first initialization.
+ * This prevents pages from checking token state before the context is ready.
+ */
+export async function waitForAuthInit(): Promise<void> {
+  if (authInitialized) {
+    return Promise.resolve()
+  }
+
+  return new Promise<void>((resolve) => {
+    authInitResolvers.push(resolve)
+  })
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -42,6 +64,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (!refreshed) {
             // No valid session
             setLoading(false)
+            // Mark as initialized even if no token
+            if (!authInitialized) {
+              authInitialized = true
+              authInitResolvers.forEach(resolve => resolve())
+              authInitResolvers = []
+            }
             return
           }
           token = getAccessToken()
@@ -49,6 +77,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (!token) {
           setLoading(false)
+          // Mark as initialized
+          if (!authInitialized) {
+            authInitialized = true
+            authInitResolvers.forEach(resolve => resolve())
+            authInitResolvers = []
+          }
           return
         }
 
@@ -72,6 +106,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.error("Failed to initialize auth:", err)
       } finally {
         setLoading(false)
+        // Mark as initialized after first attempt completes
+        if (!authInitialized) {
+          authInitialized = true
+          authInitResolvers.forEach(resolve => resolve())
+          authInitResolvers = []
+        }
       }
     }
 

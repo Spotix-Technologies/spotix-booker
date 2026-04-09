@@ -122,7 +122,7 @@ export default function RegistryDialog({ open, onClose, onExport, attendeeCount 
           <div className="mt-5 p-4 bg-slate-50 rounded-xl border border-slate-200">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Exported Fields</p>
             <div className="flex flex-wrap gap-2">
-              {["fullName", "email", "ticketId", "ticketType"].map((field) => (
+              {["fullName", "email", "ticketId", "ticketType", "faceEmbeddings"].map((field) => (
                 <span
                   key={field}
                   className="inline-flex items-center px-2.5 py-1 bg-white border border-slate-200 text-slate-600 text-xs font-mono rounded-lg"

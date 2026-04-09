@@ -185,7 +185,7 @@ export function EventsSection({ events, userId }: EventsSectionProps) {
                   </div>
                 </div>
                 <Link
-                  href={userId ? `/event-info/${userId}/${event.id}` : `/event/${event.id}`}
+                  href={userId ? `/event-info/${event.id}` : `/event/${event.id}`}
                   className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-gradient-to-r from-[#6b2fa5] to-[#8b4fc5] text-white hover:shadow-lg hover:shadow-[#6b2fa5]/30 hover:scale-[1.02] transition-all duration-300 text-sm font-semibold"
                 >
                   <Eye size={16} />

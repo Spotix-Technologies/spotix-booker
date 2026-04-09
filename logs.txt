@@ -1,3 +1,17 @@
 .LOG
 
-9:10 PM 4/8/2026
+7:06 PM 4/9/2026
+[v.25.5.0]
+Again, I am just starting logging from version 25. In my defense, Spotix booker was merged with Spotix user up until like version 10 or 12. I kept count but man logging was a chore but here we are.
+
+## Bug Fixes ##
+- The purchase date was treated as a firestore timestamp but it was actually a string
+
+
+## Chore ##
+- Now the registry can download the 128 bit float points for face Embeddings
+- Added some UI perks to the create event.
+
+It might not look alot but it is oh :(
+
+

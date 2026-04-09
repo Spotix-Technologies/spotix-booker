@@ -205,6 +205,9 @@ export async function authFetch(
   if (response.status === 401) {
     const refreshed = await tryRefreshTokens();
     if (refreshed) {
+      // Notify AuthProvider that token was refreshed so context updates
+      const { triggerAuthRefresh } = await import("@/hooks/useAuth");
+      triggerAuthRefresh();
       response = await fetch(input, withAuth());
     } else {
       clearAccessToken();

@@ -6,6 +6,8 @@ import { useMemo } from "react"
 import type React from "react"
 import { use, useState, useEffect } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { tryRefreshTokens, getAccessToken } from "@/lib/auth-client"
 import { auth } from "@/lib/firebase"
 import { onAuthStateChanged } from "firebase/auth"
 import { ArrowLeft, RefreshCw } from "lucide-react"
@@ -62,6 +64,8 @@ interface AttendeeData {
   purchaseDate: string
   purchaseTime: string
   ticketReference: string
+  facialEnroll: "enrolled" | "unenrolled"
+  faceEmbedding?: number[] | null
 }
 
 interface PayoutData {
@@ -149,6 +153,7 @@ export default function EventInfoPage({
   params: Promise<{ userId: string; eventId: string }>
 }) {
   const { userId, eventId } = use(params)
+  const router = useRouter()
 
   const [loading, setLoading]             = useState(true)
   const [saving, setSaving]               = useState(false)
@@ -191,16 +196,37 @@ export default function EventInfoPage({
 
   // ── Auth → fetch ───────────────────────────────────────────────────────────
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (user) { 
-        setCurrentUser(user)
-        fetchEventInfo()
+    const initializeAuth = async () => {
+      try {
+        // Attempt token refresh if not in memory
+        let token = getAccessToken()
+        if (!token) {
+          const refreshed = await tryRefreshTokens()
+          if (!refreshed) {
+            router.push("/login")
+            return
+          }
+        }
+      } catch (err) {
+        console.error("Auth initialization error:", err)
+        router.push("/login")
+        return
       }
-      else setLoading(false)
-    })
-    return () => unsub()
+
+      // Also check Firebase auth
+      const unsub = onAuthStateChanged(auth, (user) => {
+        if (user) { 
+          setCurrentUser(user)
+          fetchEventInfo()
+        }
+        else setLoading(false)
+      })
+      return () => unsub()
+    }
+
+    initializeAuth()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId])
+  }, [eventId, router])
 
   async function fetchEventInfo(forceRefresh: boolean = false) {
     try {
@@ -471,7 +497,7 @@ export default function EventInfoPage({
           {/* Tab Navigation */}
           <div className="border-b border-slate-200 bg-white rounded-t-lg">
             <div className="flex overflow-x-auto [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:bg-[#6b2fa5] [&::-webkit-scrollbar-thumb]:rounded-full">
-              {(["overview", "eventlink", "attendees", "discounts", "merch", "referrals", "form", "responses", "payouts", "edit"] as const).map((tab) => (
+              {(["overview", "eventlink", "payouts","attendees", "discounts", "merch", "referrals", "form", "responses",  "edit"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => handleTabSwitch(tab)}
@@ -488,8 +514,8 @@ export default function EventInfoPage({
                    : tab === "merch"     ? "Merch"
                    : tab === "referrals" ? "Referrals"
                    : tab === "form"      ? "Form"
-                   : tab === "responses" ? "Responses"
                    : tab === "payouts"   ? "Payouts"
+                   : tab === "responses" ? "Responses"
                    :                      "Edit Event"}
                 </button>
               ))}
@@ -524,7 +550,9 @@ export default function EventInfoPage({
               loadedTabs.has("attendees") ? (
                 <AttendeesTab
                   attendees={attendees}
-                  formatFirestoreTimestamp={(ts: any) => String(ts)} eventId={""}                />
+                  formatFirestoreTimestamp={(ts: any) => ts}
+                  eventId={eventId}
+                />
               ) : <TabSkeleton />
             )}
 
