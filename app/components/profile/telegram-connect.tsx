@@ -276,16 +276,16 @@ export function TelegramConnect({ userId }: TelegramConnectProps) {
           <div className="ml-2.5 w-px h-3 bg-[#6b2fa5]/20" />
 
           {/* Step 2 */}
-          <div className="flex gap-3">
+          <div className="flex gap-3 min-w-0">
             <div className="shrink-0 w-5 h-5 rounded-full bg-[#6b2fa5]/15 border border-[#6b2fa5]/30 flex items-center justify-center">
               <span className="text-[10px] font-bold text-[#6b2fa5]">2</span>
             </div>
-            <div className="space-y-1.5 pt-0.5 flex-1">
+            <div className="space-y-1.5 pt-0.5 flex-1 min-w-0">
               <p className="text-xs font-medium text-foreground">
                 Send this command in the bot chat
               </p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs bg-background border border-border rounded-lg px-3 py-2 font-mono text-foreground truncate">
+              <div className="flex items-center gap-2 min-w-0">
+                <code className="flex-1 min-w-0 text-xs bg-background border border-border rounded-lg px-3 py-2 font-mono text-foreground truncate overflow-hidden">
                   /connect {status.pendingToken}
                 </code>
                 <button
