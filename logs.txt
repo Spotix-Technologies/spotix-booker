@@ -15,3 +15,9 @@ Again, I am just starting logging from version 25. In my defense, Spotix booker 
 It might not look alot but it is oh :(
 
 
+
+11:36 AM 4/11/2026
+[v25.6.1]
+## Features
+Telegram Bot integration
+

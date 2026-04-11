@@ -23,8 +23,10 @@ import ReferralsTab from "@/components/event-info/referrals-tab"
 import EventLinkTab from "@/components/event-info/event-link-tab"
 import FormTab from "@/components/event-info/form-tab"
 import ResponsesTab from "@/components/event-info/responses-tab"
+import WeatherTab, { ForecastBadge } from "@/components/event-info/weather-tab"
+import type { ForecastData } from "@/components/event-info/weather-tab"
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 interface EventData {
   id: string
   eventName: string
@@ -91,16 +93,7 @@ interface DiscountData {
   active: boolean
 }
 
-interface ForecastData {
-  status: "pending" | "ready" | string
-  fetchedAt: string | null
-  weather: object | null
-  summary: string | null
-  eventLocation?: { lat: number | null; lng: number | null; city: string } | null
-  eventDate?: string | null
-}
-
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
+// ── Skeleton ───────────────────────────────────────────────────────────────────
 function TabSkeleton() {
   return (
     <div className="animate-pulse space-y-4">
@@ -115,38 +108,29 @@ function TabSkeleton() {
   )
 }
 
-// ─── Weather forecast badge ───────────────────────────────────────────────────
-function ForecastBadge({ forecast }: { forecast: ForecastData | null }) {
-  if (!forecast) return null
+// ── Tab config ─────────────────────────────────────────────────────────────────
+const TAB_LIST = [
+  "overview", "eventlink", "payouts", "attendees",
+  "discounts", "merch", "referrals", "form", "responses", "weather", "edit",
+] as const
 
-  if (forecast.status === "pending") {
-    return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" />
-        Weather forecast pending — available 5 days before the event
-      </span>
-    )
-  }
+type TabId = typeof TAB_LIST[number]
 
-  if (forecast.status === "ready" && forecast.weather) {
-    const w = forecast.weather as Record<string, any>
-    const description: string = w.description ?? w.condition ?? ""
-    const tempC: number | undefined = w.tempC ?? w.temp_c ?? w.temp
-    const icon: string = w.icon ?? ""
-    return (
-      <span className="inline-flex items-center gap-2 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-3 py-1.5">
-        {icon && <img src={icon} alt="" className="w-5 h-5" />}
-        {description && <span className="capitalize">{description}</span>}
-        {tempC !== undefined && <span>{tempC}°C</span>}
-        <span className="text-blue-400">· event day forecast</span>
-      </span>
-    )
-  }
-
-  return null
+const TAB_LABELS: Record<TabId, string> = {
+  overview:  "Overview",
+  eventlink: "Share Event",
+  attendees: "Attendees",
+  discounts: "Discounts",
+  merch:     "Merch",
+  referrals: "Referrals",
+  form:      "Form",
+  payouts:   "Payouts",
+  responses: "Responses",
+  weather:   "Weather",
+  edit:      "Edit Event",
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ── Page ───────────────────────────────────────────────────────────────────────
 export default function EventInfoPage({
   params,
 }: {
@@ -171,10 +155,11 @@ export default function EventInfoPage({
   const [forecast, setForecast]           = useState<ForecastData | null>(null)
   const [editFormData, setEditFormData]   = useState<any>(null)
   const [copiedField, setCopiedField]     = useState<string | null>(null)
-  const [cacheInfo, setCacheInfo]         = useState<{ isCached: boolean; remainingTime: number | null }>({ isCached: false, remainingTime: null })
-  const [activeTab, setActiveTab]         = useState<
-    "overview" | "eventlink" | "attendees" | "payouts" | "edit" | "discounts" | "merch" | "referrals" | "form" | "responses"
-  >("overview")
+  const [cacheInfo, setCacheInfo]         = useState<{ isCached: boolean; remainingTime: number | null }>({
+    isCached: false,
+    remainingTime: null,
+  })
+  const [activeTab, setActiveTab]         = useState<TabId>("overview")
   const [loadedTabs, setLoadedTabs]       = useState<Set<string>>(new Set(["overview"]))
   const [newDiscount, setNewDiscount]     = useState<DiscountData>({
     code: "", type: "percentage", value: 0, maxUses: 1, usedCount: 0, active: true,
@@ -187,18 +172,15 @@ export default function EventInfoPage({
     return Object.keys(typeCount).map((type) => ({ type, count: typeCount[type] }))
   }, [eventData, attendees])
 
-  const handleTabSwitch = (
-    tab: "overview" | "eventlink" | "attendees" | "payouts" | "edit" | "discounts" | "merch" | "referrals" | "form" | "responses"
-  ) => {
+  const handleTabSwitch = (tab: TabId) => {
     setActiveTab(tab)
     setLoadedTabs((prev) => new Set([...Array.from(prev), tab]))
   }
 
-  // ── Auth → fetch ───────────────────────────────────────────────────────────
+  // ── Auth -> fetch ──────────────────────────────────────────────────────────
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        // Attempt token refresh if not in memory
         let token = getAccessToken()
         if (!token) {
           const refreshed = await tryRefreshTokens()
@@ -213,13 +195,13 @@ export default function EventInfoPage({
         return
       }
 
-      // Also check Firebase auth
       const unsub = onAuthStateChanged(auth, (user) => {
-        if (user) { 
+        if (user) {
           setCurrentUser(user)
           fetchEventInfo()
+        } else {
+          setLoading(false)
         }
-        else setLoading(false)
       })
       return () => unsub()
     }
@@ -230,7 +212,6 @@ export default function EventInfoPage({
 
   async function fetchEventInfo(forceRefresh: boolean = false) {
     try {
-      // Check cache if not forcing refresh
       if (!forceRefresh) {
         const cachedData = eventCacheManager.get(`event_${eventId}`)
         if (cachedData) {
@@ -243,7 +224,6 @@ export default function EventInfoPage({
         }
       }
 
-      // Invalidate cache if forcing refresh
       if (forceRefresh) {
         eventCacheManager.invalidate(`event_${eventId}`)
         setRefreshing(true)
@@ -256,10 +236,8 @@ export default function EventInfoPage({
         return
       }
       const data = await res.json()
-      
-      // Cache the full response
+
       eventCacheManager.set(`event_${eventId}`, data)
-      
       populateEventData(data)
       setCacheInfo({ isCached: false, remainingTime: null })
     } catch (e) {
@@ -284,9 +262,7 @@ export default function EventInfoPage({
     setEditFormData({ ...data.eventData, enablePricing: !data.eventData.isFree })
   }
 
-  const handleRefreshData = () => {
-    fetchEventInfo(true)
-  }
+  const handleRefreshData = () => fetchEventInfo(true)
 
   // ── Clipboard ──────────────────────────────────────────────────────────────
   const copyToClipboard = (text: string, field: string) => {
@@ -295,7 +271,7 @@ export default function EventInfoPage({
     setTimeout(() => setCopiedField(null), 2000)
   }
 
-  // ── Add discount ───────────────────────────────────────────────────────────
+  // ── Discounts ──────────────────────────────────────────────────────────────
   const handleDiscountInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
     setNewDiscount((prev) => ({ ...prev, [name]: type === "number" ? Number(value) : value }))
@@ -312,8 +288,6 @@ export default function EventInfoPage({
       })
       const data = await res.json()
       if (!res.ok) { alert(data.error ?? "Failed to add discount."); return }
-
-      // Append the new discount (with server-assigned id) to local state
       setDiscounts((prev) => [...prev, data.discount])
       setNewDiscount({ code: "", type: "percentage", value: 0, maxUses: 1, usedCount: 0, active: true })
       alert("Discount code added successfully!")
@@ -325,12 +299,9 @@ export default function EventInfoPage({
     }
   }
 
-  // ── Toggle discount ────────────────────────────────────────────────────────
-  // The GET response now includes `id` on each discount so we can target the
-  // doc directly without a secondary lookup.
   const handleToggleDiscountStatus = async (index: number) => {
     const target = discounts[index]
-    if (!target.id) { console.error("Discount missing id — cannot toggle"); return }
+    if (!target.id) { console.error("Discount missing id -- cannot toggle"); return }
     setSaving(true)
     try {
       const res = await fetch(`/api/event/list/${eventId}`, {
@@ -340,7 +311,6 @@ export default function EventInfoPage({
       })
       const data = await res.json()
       if (!res.ok) { alert(data.error ?? "Failed to toggle discount."); return }
-
       setDiscounts((prev) =>
         prev.map((d, i) => (i === index ? { ...d, active: data.active } : d))
       )
@@ -389,7 +359,6 @@ export default function EventInfoPage({
       const data = await res.json()
       if (!res.ok) { alert(data.error ?? "Failed to update event."); return }
 
-      // Reflect edits in local eventData so Overview tab updates immediately
       setEventData((prev) =>
         prev
           ? {
@@ -441,7 +410,6 @@ export default function EventInfoPage({
   if (!eventData) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
-        {/* <Nav /> */}
         <div className="max-w-6xl mx-auto">
           <Link href="/events">
             <button className="flex items-center gap-2 px-4 py-2 border border-slate-300 bg-white text-slate-700 rounded-lg hover:bg-slate-50 transition-colors mb-4">
@@ -489,6 +457,7 @@ export default function EventInfoPage({
           <div className="flex flex-col gap-2">
             <h1 className="text-4xl font-bold text-slate-900">{eventData.eventName}</h1>
             <p className="text-slate-600">{eventData.eventVenue}</p>
+            {/* Mini badge still shows in the header for quick glance */}
             <ForecastBadge forecast={forecast} />
           </div>
         </div>
@@ -497,7 +466,7 @@ export default function EventInfoPage({
           {/* Tab Navigation */}
           <div className="border-b border-slate-200 bg-white rounded-t-lg">
             <div className="flex overflow-x-auto [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-thumb]:bg-[#6b2fa5] [&::-webkit-scrollbar-thumb]:rounded-full">
-              {(["overview", "eventlink", "payouts","attendees", "discounts", "merch", "referrals", "form", "responses",  "edit"] as const).map((tab) => (
+              {TAB_LIST.map((tab) => (
                 <button
                   key={tab}
                   onClick={() => handleTabSwitch(tab)}
@@ -507,16 +476,7 @@ export default function EventInfoPage({
                       : "border-b-transparent text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  {tab === "overview"    ? "Overview"
-                   : tab === "eventlink" ? "Share Event"
-                   : tab === "attendees" ? "Attendees"
-                   : tab === "discounts" ? "Discounts"
-                   : tab === "merch"     ? "Merch"
-                   : tab === "referrals" ? "Referrals"
-                   : tab === "form"      ? "Form"
-                   : tab === "payouts"   ? "Payouts"
-                   : tab === "responses" ? "Responses"
-                   :                      "Edit Event"}
+                  {TAB_LABELS[tab]}
                 </button>
               ))}
             </div>
@@ -540,11 +500,11 @@ export default function EventInfoPage({
               ) : <TabSkeleton />
             )}
 
-          {activeTab === "eventlink" && (
-            loadedTabs.has("eventlink") && eventData ? (
-              <EventLinkTab eventId={eventData.id} />
-            ) : <TabSkeleton />
-          )}
+            {activeTab === "eventlink" && (
+              loadedTabs.has("eventlink") && eventData ? (
+                <EventLinkTab eventId={eventData.id} />
+              ) : <TabSkeleton />
+            )}
 
             {activeTab === "attendees" && (
               loadedTabs.has("attendees") ? (
@@ -612,6 +572,10 @@ export default function EventInfoPage({
                   payId={eventData.payId ?? ""}
                 />
               ) : <TabSkeleton />
+            )}
+
+            {activeTab === "weather" && (
+              <WeatherTab forecast={forecast} />
             )}
 
             {activeTab === "edit" && (

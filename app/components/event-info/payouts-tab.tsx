@@ -627,12 +627,12 @@ export default function PayoutsTab({
         </div>
       )}
 
-      {/* ── Payout Logs View ──────────────────────────────────────────────── */}
+    
       {activeView === "logs" && (
         <PayoutLog eventId={eventId} userId={userId} />
       )}
 
-      {/* ── Payout Methods View ───────────────────────────────────────────── */}
+     
       {activeView === "methods" && (
         <ViewPayoutMethods
           methods={methods}
@@ -643,7 +643,7 @@ export default function PayoutsTab({
         />
       )}
 
-      {/* ── Add Method View ───────────────────────────────────────────────── */}
+      
       {activeView === "addMethod" && (
         <CreatePayoutMethod
           userId={currentUserId}

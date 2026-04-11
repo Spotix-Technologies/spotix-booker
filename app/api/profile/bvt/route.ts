@@ -1,3 +1,5 @@
+// app/api/profile/bvt/route.ts
+
 import { adminDb } from "@/lib/firebase-admin"
 import { verifyAccessToken } from "@/lib/auth-tokens"
 import { type NextRequest, NextResponse } from "next/server"

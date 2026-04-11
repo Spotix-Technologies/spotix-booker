@@ -1,3 +1,5 @@
+// app/profile/page.tsx
+
 "use client"
 
 import { useEffect, useState } from "react"
@@ -11,6 +13,7 @@ import { ProfileStats } from "@/components/profile/profile-stats"
 import { VirtualEventsSection } from "@/components/profile/virtual-events-section"
 import { CollaborationsSection } from "@/components/profile/collaborations-section"
 import { PersonalInformation } from "@/components/profile/personal-information"
+import { TelegramConnect } from "@/components/profile/telegram-connect"
 
 interface ProfileData {
   uid: string
@@ -42,7 +45,7 @@ export default function ProfilePage() {
       try {
         // Initialize auth — attempt token refresh if not in memory
         let token = getAccessToken()
-        
+
         if (!token) {
           const refreshed = await tryRefreshTokens()
           if (!refreshed) {
@@ -132,6 +135,19 @@ export default function ProfilePage() {
               <VirtualEventsSection profileData={profileData} />
               <CollaborationsSection profileData={profileData} />
               <PersonalInformation profileData={profileData} />
+
+              {/* Telegram Integration */}
+              <section className="mt-8">
+                <div className="rounded-2xl border border-border bg-card p-6 space-y-4">
+                  <div>
+                    <h2 className="text-base font-semibold text-foreground">Telegram</h2>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Connect your Telegram to receive ticket sale alerts and manage payouts on the go.
+                    </p>
+                  </div>
+                  <TelegramConnect userId={profileData.uid} />
+                </div>
+              </section>
             </>
           )}
         </main>

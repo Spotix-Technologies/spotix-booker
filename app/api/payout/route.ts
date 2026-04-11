@@ -246,21 +246,19 @@ export async function POST(req: NextRequest) {
     return fail("A payout request for this date has already been submitted.", 409)
   }
 
-  // ── 10. Write ──────────────────────────────────────────────────────────────
-  // NOTE: paidAmount and availableRevenue on the event document are NOT updated here.
-  // Those fields are updated by the Paystack webhook after settlement is confirmed.
+
   try {
     const payoutRef = await adminDb.collection("payouts").add({
   eventId,
   userId,
   date,
   amount,
-  methodId,                              // ← added
+  methodId,                              
   bankName: primaryMethod.bankName ?? "",
   bankCode: primaryMethod.bankCode ?? "",
   accountNumber: primaryMethod.accountNumber ?? "",
   accountName: primaryMethod.accountName ?? "",
-  recipientCode: primaryMethod.recipientCode ?? null,  // ← snapshot it too
+  recipientCode: primaryMethod.recipientCode ?? null, 
   status: "pending",
   createdAt: FieldValue.serverTimestamp(),
   pendingAt: FieldValue.serverTimestamp(),
@@ -277,7 +275,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ── PATCH: re-run a failed payout (set status back to pending) ───────────────
+
 export async function PATCH(req: NextRequest) {
   const auth = await authenticate()
   if (auth instanceof NextResponse) return auth
