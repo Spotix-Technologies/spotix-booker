@@ -1,6 +1,6 @@
 {
   "name": "spotix-booker",
-  "version": "25.6.0",
+  "version": "25.6.2",
   "private": true,
   "scripts": {
     "dev": "next dev",

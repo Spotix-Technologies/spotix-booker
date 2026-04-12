@@ -21,3 +21,16 @@ It might not look alot but it is oh :(
 ## Features
 Telegram Bot integration
 
+
+9:29 PM 4/12/2026
+[v25.6.2]
+At this point it's like na everyday I dey push but this one was long overdue. The only thing I did was to finally address the inconsistent session management
+## Chores
+The useAuth hook does a tryRefreshTokens() on mount and successfully restores the session but for reasons only God knows the dumb login page doesn't react to this restored auth state and tries to redirect away, stupid server. The useEffect in LoginClient only checks getAccessToken() (the in-memory token) which hasn't been restored yet at mount time because AuthProvider runs its init async. Now, the login page watches the useAuth context and redirect as soon as a user is detected, rather than doing its own one-shot refresh check.
+The new approach has two key differences:
+- Reactive redirect via useAuth: So like instead of doing its own dumb token refresh, the login page simply watches { user, authLoading } from the context like a good boy. AuthProvider already does the refresh on mount so the login page just needs to react when that completes. Chikina! The useEffect only fires once authLoading is false, so there's no race.
+
+- Render gate: the if (authLoading || user) return <Preloader isLoading={true} /> at the bottom means the login form is never even seen while auth state is uncertain or a redirect is in flight. This is what kills the "logout button showing on login page" flash. The nav sees user from the same context and renders consistently.
+
+So that's it folks
+

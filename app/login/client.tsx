@@ -1,17 +1,15 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Preloader } from "@/components/preloader"
 import { ParticlesBackground } from "@/components/particles-background"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Mail, Lock, AlertCircle, ArrowRight, Eye, EyeOff } from "lucide-react"
 import Image from "next/image"
-import { storeAccessToken, getDeviceId, collectDeviceMeta, tryRefreshTokens, getAccessToken } from "@/lib/auth-client"
-import { triggerAuthRefresh } from "@/hooks/useAuth"
-import { useEffect } from "react"
+import { storeAccessToken, getDeviceId, collectDeviceMeta } from "@/lib/auth-client"
+import { triggerAuthRefresh, useAuth } from "@/hooks/useAuth"
 
 export default function LoginClient() {
   const router = useRouter()
@@ -22,27 +20,8 @@ export default function LoginClient() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
-  // Attempt silent refresh on mount — if successful, redirect to dashboard
-  useEffect(() => {
-    const attemptSilentRefresh = async () => {
-      try {
-        // If we already have an access token, attempt to refresh it
-        if (getAccessToken()) {
-          const refreshed = await tryRefreshTokens()
-          if (refreshed) {
-            console.log("✅ Silent refresh successful — redirecting to dashboard")
-            router.push("/dashboard")
-          }
-        }
-      } catch (err) {
-        console.warn("Silent refresh failed (expected if not logged in):", err)
-      }
-    }
+  const { user, loading: authLoading } = useAuth()
 
-    attemptSilentRefresh()
-  }, [router])
-
-  // Validate and normalize redirect URL — prevent open redirects
   const validateRedirect = (url: string): string => {
     if (!url || url === "/" || !url.startsWith("/")) {
       return "/dashboard"
@@ -52,6 +31,19 @@ export default function LoginClient() {
 
   const rawRedirect = searchParams.get("redirect") || ""
   const redirect = validateRedirect(rawRedirect)
+  const showRedirectNotice = Boolean(redirect && redirect !== "/dashboard")
+
+  // Reactive redirect — fires once AuthProvider finishes initialising
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) return
+
+    if (!user.isBooker) {
+      router.replace("/not-booker")
+    } else {
+      router.replace(redirect)
+    }
+  }, [user, authLoading, redirect, router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -59,19 +51,15 @@ export default function LoginClient() {
     setLoading(true)
 
     try {
-      // Step 1: Resolve device identity
-      const deviceId = getDeviceId()       // stable UUID persisted in localStorage
-      const deviceMeta = collectDeviceMeta() // platform, model, appVersion
+      const deviceId = getDeviceId()
+      const deviceMeta = collectDeviceMeta()
 
-      // Step 2: Send credentials directly to our login endpoint
-      // (The endpoint will authenticate against Firebase and return our access/refresh tokens)
-      let sessionResponse = await fetch("/api/auth/login", {
+      const sessionResponse = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, deviceId, deviceMeta }),
       })
 
-      // If request failed, get error details
       if (!sessionResponse.ok) {
         const errorData = await sessionResponse.json()
         throw new Error(errorData.message || "Failed to login")
@@ -79,31 +67,24 @@ export default function LoginClient() {
 
       const sessionData = await sessionResponse.json()
 
-      // Step 3: Persist access token in memory (refresh token is in httpOnly cookie)
       storeAccessToken(sessionData.accessToken)
 
       const isBooker = sessionData?.user?.isBooker || false
 
-      console.log("✅ Session created successfully")
-
-      // Trigger auth context to refetch user data
+      // Trigger AuthProvider to re-fetch — the useEffect above handles redirect
       triggerAuthRefresh()
 
-      // Step 4: Route based on booker status
       if (!isBooker) {
-        console.warn("⚠️ User is not a booker — redirecting to /not-booker")
-        router.push("/not-booker")
+        router.replace("/not-booker")
         return
       }
 
-      console.log("✅ Redirecting to:", redirect)
-      router.push(redirect)
+      router.replace(redirect)
     } catch (err: any) {
       console.error("Login error:", err)
 
       let errorMessage = err.message || "Failed to login. Please try again."
 
-      // Handle common error messages from our API
       if (errorMessage.includes("Incorrect email") || errorMessage.includes("password")) {
         errorMessage = "Incorrect email or password"
       } else if (errorMessage.includes("email")) {
@@ -120,6 +101,11 @@ export default function LoginClient() {
     }
   }
 
+  // Gate render — never show login form while auth state is uncertain or redirect is pending
+  if (authLoading || user) {
+    return <Preloader isLoading={true} />
+  }
+
   return (
     <>
       <Preloader isLoading={loading} />
@@ -127,6 +113,7 @@ export default function LoginClient() {
 
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-slate-100 flex flex-col items-center justify-center px-4 py-12">
         <div className="max-w-md w-full space-y-8 animate-in fade-in zoom-in-95 duration-700">
+
           {/* Header */}
           <div className="text-center space-y-6">
             <div className="inline-flex items-center justify-center mx-auto">
@@ -148,7 +135,7 @@ export default function LoginClient() {
               <p className="text-lg text-slate-600">Sign in to your booker dashboard</p>
             </div>
 
-            {redirect && redirect !== "/" && (
+            {showRedirectNotice && (
               <div className="flex items-center gap-2 justify-center p-3 rounded-lg bg-blue-50 border border-blue-200">
                 <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0" />
                 <p className="text-sm text-blue-800">
@@ -162,6 +149,7 @@ export default function LoginClient() {
           {/* Login Form Card */}
           <div className="bg-white rounded-2xl shadow-xl border-2 border-slate-200 p-8 space-y-6">
             <form onSubmit={handleLogin} className="space-y-5">
+
               {/* Email Field */}
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-slate-700">
@@ -253,17 +241,17 @@ export default function LoginClient() {
             </form>
 
             {/* Signup Link */}
-            <p className="text-center text-sm text-slate-500">
-              Don't have an account?{" "}
-              <a
-                href="https://spotix.com.ng/auth/signup"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[#6b2fa5] font-semibold hover:underline"
-              >
-                Sign up
-              </a>
-            </p>
+        <p className="text-center text-sm text-slate-500">
+          {"Don't have an account?"}{" "}
+          <a
+            href="https://spotix.com.ng/auth/signup"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#6b2fa5] font-semibold hover:underline"
+          >
+            Sign up
+          </a>
+        </p>
           </div>
 
           {/* Footer Note */}
@@ -277,6 +265,7 @@ export default function LoginClient() {
               Privacy Policy
             </Link>
           </p>
+
         </div>
       </div>
     </>
