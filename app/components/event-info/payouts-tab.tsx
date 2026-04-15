@@ -381,6 +381,7 @@ export default function PayoutsTab({
   const [payoutError, setPayoutError] = useState<PayoutError | null>(null)
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
   const [isBulkPayoutLoading, setIsBulkPayoutLoading] = useState(false)
+  const [bulkPayoutTxns, setBulkPayoutTxns] = useState<DailyTransaction[]>([])
 
   // Live ticker for countdown timers
   const [, setTick] = useState(0)
@@ -461,64 +462,51 @@ export default function PayoutsTab({
     setPayoutError(classifyPayoutError(rawMessage, txnDate))
   }
 
-  async function handleBulkPayout() {
+  function handleBulkPayoutClick() {
     if (selectedDates.size === 0) return
+    const txnsToProcess = transactions.filter((t) => selectedDates.has(t.date))
+    setBulkPayoutTxns(txnsToProcess)
+    setDialogTxn(null) // Clear single transaction if any
+  }
 
-    setIsBulkPayoutLoading(true)
-    const datesToProcess = Array.from(selectedDates)
-    let successCount = 0
-    let failureCount = 0
-    let lastErrorMessage = ""
-
-    for (const date of datesToProcess) {
-      try {
-        const res = await fetch("/api/payout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            eventId,
-            date,
-            amount: transactions.find((t) => t.date === date)?.ticketSales ?? 0,
-          }),
-        })
-        const data = await res.json()
-        if (!res.ok) {
-          failureCount++
-          lastErrorMessage = data.error || "Payout request failed"
-        } else {
-          successCount++
-          setPayoutStatuses((prev) => ({ ...prev, [date]: "pending" }))
-        }
-      } catch (err: any) {
-        failureCount++
-        lastErrorMessage = err.message || "Network error"
-      }
-    }
-
-    setIsBulkPayoutLoading(false)
+  function handleBulkPayoutSuccess(dates: string | string[]) {
+    const datesToUpdate = Array.isArray(dates) ? dates : [dates]
+    datesToUpdate.forEach((date) => {
+      setPayoutStatuses((prev) => ({ ...prev, [date]: "pending" }))
+    })
     setSelectedDates(new Set())
-
-    if (failureCount > 0) {
-      setPayoutError({
-        kind: "generic",
-        reason: `${successCount} payout(s) submitted, ${failureCount} failed. Last error: ${lastErrorMessage}`,
-      })
-    } else if (successCount > 0) {
-      // Success — no error banner needed, optimistic update already applied
-    }
+    setBulkPayoutTxns([])
   }
 
   return (
     <div className="space-y-6">
       {/* Payout Confirmation Dialog */}
-      {dialogTxn && (
+      {(dialogTxn || bulkPayoutTxns.length > 0) && (
         <PayoutConfirmation
-          txn={dialogTxn}
+          txns={bulkPayoutTxns.length > 0 ? bulkPayoutTxns : dialogTxn!}
           methods={methods}
           eventId={eventId}
-          onSuccess={handlePayoutSuccess}
-          onError={(msg) => handlePayoutError(msg, dialogTxn.date)}
-          onClose={() => setDialogTxn(null)}
+          onSuccess={(dates) => {
+            if (bulkPayoutTxns.length > 0) {
+              handleBulkPayoutSuccess(dates)
+            } else if (dialogTxn) {
+              handlePayoutSuccess(dialogTxn.date)
+            }
+          }}
+          onError={(msg) => {
+            if (bulkPayoutTxns.length > 0) {
+              setPayoutError({
+                kind: "generic",
+                reason: msg,
+              })
+            } else if (dialogTxn) {
+              handlePayoutError(msg, dialogTxn.date)
+            }
+          }}
+          onClose={() => {
+            setDialogTxn(null)
+            setBulkPayoutTxns([])
+          }}
         />
       )}
 
@@ -686,24 +674,15 @@ export default function PayoutsTab({
                     </p>
                   </div>
                   <button
-                    onClick={handleBulkPayout}
-                    disabled={selectedDates.size === 0 || isBulkPayoutLoading}
+                    onClick={handleBulkPayoutClick}
+                    disabled={selectedDates.size === 0}
                     className={`px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors flex items-center gap-2 ${
-                      selectedDates.size > 0 && !isBulkPayoutLoading
+                      selectedDates.size > 0
                         ? "bg-[#6b2fa5] text-white hover:bg-[#5a2589]"
                         : "bg-gray-200 text-gray-400 cursor-not-allowed"
                     }`}
                   >
-                    {isBulkPayoutLoading ? (
-                      <>
-                        <Loader2 size={14} className="animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        Payout {selectedDates.size > 0 ? `(${selectedDates.size})` : ""}
-                      </>
-                    )}
+                    Payout {selectedDates.size > 0 ? `(${selectedDates.size})` : ""}
                   </button>
                 </div>
               )}
@@ -753,8 +732,8 @@ export default function PayoutsTab({
       {activeView === "addMethod" && (
         <CreatePayoutMethod
           userId={currentUserId}
-          onCreated={() => {
-            fetchMethods()
+          onCreated={(newMethod) => {
+            setMethods((prev) => [...prev, newMethod])
             setActiveView("methods")
           }}
           onCancel={() => setActiveView("methods")}

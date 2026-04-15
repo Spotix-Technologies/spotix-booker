@@ -13,8 +13,18 @@ interface Bank {
 
 interface CreatePayoutMethodProps {
   userId: string
-  onCreated: () => void
+  onCreated: (method: PayoutMethod) => void
   onCancel: () => void
+}
+
+interface PayoutMethod {
+  id: string
+  accountNumber: string
+  bankName: string
+  bankCode: string
+  accountName: string
+  primary: boolean
+  createdAt: string
 }
 
 export default function CreatePayoutMethod({ userId, onCreated, onCancel }: CreatePayoutMethodProps) {
@@ -168,7 +178,18 @@ export default function CreatePayoutMethod({ userId, onCreated, onCancel }: Crea
 
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to save payout method")
-      onCreated()
+      
+      // Pass the newly created method to the callback
+      const newMethod: PayoutMethod = {
+        id: data.id || "",
+        accountNumber,
+        bankName: selectedBank.name,
+        bankCode: selectedBank.code,
+        accountName: verifiedName,
+        primary: data.primary ?? false,
+        createdAt: new Date().toISOString(),
+      }
+      onCreated(newMethod)
     } catch (err: any) {
       setSaveError(err.message || "Failed to save. Please try again.")
     } finally {

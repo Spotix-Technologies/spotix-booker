@@ -1,6 +1,6 @@
 "use client"
 
-import { X, Loader2, AlertCircle } from "lucide-react"
+import { X, Loader2, AlertCircle, Star } from "lucide-react"
 import { useState } from "react"
 
 interface DailyTransaction {
@@ -24,49 +24,56 @@ interface PayoutMethod {
 }
 
 interface PayoutConfirmationProps {
-  txn: DailyTransaction
+  txns: DailyTransaction | DailyTransaction[]
   methods: PayoutMethod[]
   eventId: string
-  onSuccess: (date: string) => void
+  onSuccess: (dates: string | string[]) => void
   onError: (message: string) => void
   onClose: () => void
 }
 
 export default function PayoutConfirmation({
-  txn,
+  txns,
   methods,
   eventId,
   onSuccess,
   onError,
   onClose,
 }: PayoutConfirmationProps) {
+  const transactions = Array.isArray(txns) ? txns : [txns]
   const primaryMethod = methods.find((m) => m.primary) ?? null
   const [selectedMethodId, setSelectedMethodId] = useState<string>(primaryMethod?.id ?? "")
   const [processing, setProcessing] = useState(false)
 
   const selectedMethod = methods.find((m) => m.id === selectedMethodId) ?? null
+  const totalAmount = transactions.reduce((sum, t) => sum + t.ticketSales, 0)
+  const totalTickets = transactions.reduce((sum, t) => sum + t.ticketCount, 0)
 
   async function handleConfirm() {
     if (!selectedMethod) return
     setProcessing(true)
+    const successDates: string[] = []
+
     try {
-      const res = await fetch("/api/payout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventId,
-          date: txn.date,
-          amount: txn.ticketSales,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        // Close dialog first so error surfaces on the parent tab
-        onClose()
-        onError(data.error || "Payout request failed")
-        return
+      for (const txn of transactions) {
+        const res = await fetch("/api/payout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventId,
+            date: txn.date,
+            amount: txn.ticketSales,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          onClose()
+          onError(data.error || "Payout request failed")
+          return
+        }
+        successDates.push(txn.date)
       }
-      onSuccess(txn.date)
+      onSuccess(successDates.length === 1 ? successDates[0] : successDates)
       onClose()
     } catch {
       onClose()
@@ -107,20 +114,32 @@ export default function PayoutConfirmation({
         </div>
 
         {/* Transaction Summary */}
-        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-1">
+        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-2">
           <p className="text-xs text-purple-600 font-semibold uppercase tracking-wider">
-            Transaction Day
+            {transactions.length === 1 ? "Transaction Day" : "Transaction Days"}
           </p>
-          <p className="text-xl font-bold text-gray-900">{txn.date}</p>
+          <div className="space-y-1">
+            {transactions.length === 1 ? (
+              <p className="text-xl font-bold text-gray-900">{transactions[0].date}</p>
+            ) : (
+              <div className="space-y-0.5">
+                {transactions.map((t) => (
+                  <p key={t.date} className="text-base font-semibold text-gray-900">
+                    {t.date}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="flex gap-4 text-sm text-gray-600 pt-1">
             <span>
-              <span className="font-semibold text-gray-800">{txn.ticketCount}</span>{" "}
-              ticket{txn.ticketCount !== 1 ? "s" : ""}
+              <span className="font-semibold text-gray-800">{totalTickets}</span>{" "}
+              ticket{totalTickets !== 1 ? "s" : ""}
             </span>
             <span>
-              Amount:{" "}
+              Total:{" "}
               <span className="font-semibold text-gray-800">
-                ₦{Number(txn.ticketSales).toLocaleString()}
+                ₦{Number(totalAmount).toLocaleString()}
               </span>
             </span>
           </div>
@@ -161,9 +180,7 @@ export default function PayoutConfirmation({
                         {method.bankName}
                       </p>
                       {method.primary && (
-                        <span className="text-xs bg-[#6b2fa5] text-white px-1.5 py-0.5 rounded-full font-medium">
-                          Primary
-                        </span>
+                        <Star size={14} fill="#6b2fa5" className="text-[#6b2fa5] flex-shrink-0" />
                       )}
                     </div>
                     <p className="text-xs text-gray-500">
