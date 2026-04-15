@@ -2,6 +2,7 @@
 
 "use client"
 
+import { useEffect, useState } from "react"
 import { Cloud, CloudRain, CloudSnow, CloudLightning, Sun, CloudDrizzle, Wind, Thermometer, Droplets, MapPin } from "lucide-react"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -135,7 +136,33 @@ function StatCard({
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
-export default function WeatherTab({ forecast }: { forecast: ForecastData | null }) {
+export default function WeatherTab({
+  forecast: initialForecast,
+  eventId,
+}: {
+  forecast: ForecastData | null
+  eventId?: string
+}) {
+  const [forecast, setForecast] = useState<ForecastData | null>(initialForecast)
+  const [loading, setLoading] = useState(false)
+
+  // Lazy load forecast when component mounts if not already loaded
+  useEffect(() => {
+    if (!forecast && eventId && !loading) {
+      setLoading(true)
+      fetch(`/api/forecast?eventId=${eventId}`)
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch forecast")
+          return res.json()
+        })
+        .then((data) => setForecast(data))
+        .catch((err) => {
+          console.error("[WeatherTab] forecast fetch failed:", err)
+          // Don't set forecast on error; the UI will show pending state
+        })
+        .finally(() => setLoading(false))
+    }
+  }, [eventId, forecast, loading])
 
   // -- Pending ----------------------------------------------------------------
   if (!forecast || forecast.status === "pending") {

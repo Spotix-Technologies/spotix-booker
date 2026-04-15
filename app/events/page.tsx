@@ -3,12 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { authFetch, getAccessToken, tryRefreshTokens } from "@/lib/auth-client"
-// import { Nav } from "@/components/nav"
 import { Preloader } from "@/components/preloader"
 import { ParticlesBackground } from "@/components/particles-background"
 import { EventsList } from "@/components/events/events-list"
 import { CollaboratedEventsList } from "@/components/events/collaborated-events-list"
-import { Search, Plus, Calendar, TrendingUp, Users, RefreshCw } from "lucide-react"
+import EventTransferDialog, { type IncomingTransfer } from "@/components/events/event-transfer-dialog"
+import { Search, Plus, Calendar, TrendingUp, Users, RefreshCw, ArrowRightLeft } from "lucide-react"
 import type { EventData, CollaboratedEventData } from "@/types/event"
 
 // ─── Cache helpers ────────────────────────────────────────────────────────────
@@ -58,18 +58,19 @@ export default function EventsPage() {
   const [searchQuery, setSearchQuery]         = useState("")
   const [statusFilter, setStatusFilter]       = useState("all")
 
+  // ─── Transfer state ────────────────────────────────────────────────────────
+  const [showTransferDialog, setShowTransferDialog] = useState(false)
+  const [incomingTransfers, setIncomingTransfers]   = useState<IncomingTransfer[]>([])
+
   // ── Auth ──────────────────────────────────────────────────────────────────
   useEffect(() => {
-    // Initialize auth — attempt token refresh if not in memory
     const initializeAuth = async () => {
       try {
         let token = getAccessToken()
-        
-        // If not in memory, try to refresh from the httpOnly cookie
+
         if (!token) {
           const refreshed = await tryRefreshTokens()
           if (!refreshed) {
-            // No valid session
             router.push("/login")
             return
           }
@@ -81,7 +82,6 @@ export default function EventsPage() {
           return
         }
 
-        // Fetch user ID from the API
         const userResponse = await authFetch("/api/user/me")
         if (!userResponse.ok) {
           router.push("/login")
@@ -107,54 +107,67 @@ export default function EventsPage() {
     initializeAuth()
   }, [router])
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
-  const fetchEvents = useCallback(async (bust = false) => {
-    if (!userId) return
+  // ── Fetch incoming transfers (runs once after auth) ───────────────────────
+  useEffect(() => {
+    if (!authChecked) return
 
-    if (bust) {
-      bustCache(userId)
-      setRefreshing(true)
-    }
+    fetch("/api/event/transfer/incoming")
+      .then((r) => (r.ok ? r.json() : { transfers: [] }))
+      .then((d) => setIncomingTransfers(d.transfers ?? []))
+      .catch(() => {})
+  }, [authChecked])
 
-    if (!bust) {
-      const ownedCache  = readCache<EventData[]>(cacheKey(userId, "owned"))
-      const collabCache = readCache<CollaboratedEventData[]>(cacheKey(userId, "collaborated"))
+  // ── Fetch events ──────────────────────────────────────────────────────────
+  const fetchEvents = useCallback(
+    async (bust = false) => {
+      if (!userId) return
 
-      if (ownedCache && collabCache) {
-        setEvents(ownedCache.data)
-        setCollaborated(collabCache.data)
-        setCachedAt(Math.min(ownedCache.cachedAt, collabCache.cachedAt))
+      if (bust) {
+        bustCache(userId)
+        setRefreshing(true)
+      }
+
+      if (!bust) {
+        const ownedCache  = readCache<EventData[]>(cacheKey(userId, "owned"))
+        const collabCache = readCache<CollaboratedEventData[]>(cacheKey(userId, "collaborated"))
+
+        if (ownedCache && collabCache) {
+          setEvents(ownedCache.data)
+          setCollaborated(collabCache.data)
+          setCachedAt(Math.min(ownedCache.cachedAt, collabCache.cachedAt))
+          setLoading(false)
+          return
+        }
+      }
+
+      try {
+        const [ownedRes, collabRes] = await Promise.all([
+          authFetch("/api/event/list?action=owned"),
+          authFetch("/api/event/list?action=collaborated"),
+        ])
+
+        if (ownedRes.ok) {
+          const { events: owned } = await ownedRes.json()
+          setEvents(owned ?? [])
+          writeCache(cacheKey(userId, "owned"), owned ?? [])
+        }
+
+        if (collabRes.ok) {
+          const { events: collaborated } = await collabRes.json()
+          setCollaborated(collaborated ?? [])
+          writeCache(cacheKey(userId, "collaborated"), collaborated ?? [])
+        }
+
+        setCachedAt(Date.now())
+      } catch (e) {
+        console.error("Failed to fetch events:", e)
+      } finally {
         setLoading(false)
-        return
+        setRefreshing(false)
       }
-    }
-
-    try {
-      const [ownedRes, collabRes] = await Promise.all([
-        authFetch("/api/event/list?action=owned"),
-        authFetch("/api/event/list?action=collaborated"),
-      ])
-
-      if (ownedRes.ok) {
-        const { events: owned } = await ownedRes.json()
-        setEvents(owned ?? [])
-        writeCache(cacheKey(userId, "owned"), owned ?? [])
-      }
-
-      if (collabRes.ok) {
-        const { events: collaborated } = await collabRes.json()
-        setCollaborated(collaborated ?? [])
-        writeCache(cacheKey(userId, "collaborated"), collaborated ?? [])
-      }
-
-      setCachedAt(Date.now())
-    } catch (e) {
-      console.error("Failed to fetch events:", e)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [userId])
+    },
+    [userId]
+  )
 
   useEffect(() => {
     if (userId) fetchEvents(false)
@@ -165,11 +178,12 @@ export default function EventsPage() {
   useEffect(() => {
     if (!userId) return
     timerRef.current = setInterval(() => fetchEvents(true), CACHE_TTL_MS)
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
   }, [userId, fetchEvents])
 
-  // ── Optimistic event updater (used by pause/resume) ───────────────────────
-  // Also keeps localStorage cache in sync so a page refresh reflects the change.
+  // ── Optimistic event updater ──────────────────────────────────────────────
   const handleEventsChange = useCallback(
     (updater: (prev: EventData[]) => EventData[]) => {
       setEvents((prev) => {
@@ -179,6 +193,21 @@ export default function EventsPage() {
       })
     },
     [userId]
+  )
+
+  // ── Transfer dialog action handler ────────────────────────────────────────
+  const handleTransferActioned = useCallback(
+    (transferId: string, newStatus: "accepted" | "rejected") => {
+      // Remove from the banner immediately
+      setIncomingTransfers((prev) => prev.filter((t) => t.id !== transferId))
+
+      // If accepted, bust cache so the new event appears on refresh
+      if (newStatus === "accepted" && userId) {
+        bustCache(userId)
+        fetchEvents(true)
+      }
+    },
+    [userId, fetchEvents]
   )
 
   // ── Stats ─────────────────────────────────────────────────────────────────
@@ -199,8 +228,6 @@ export default function EventsPage() {
       <ParticlesBackground />
 
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50/20 to-gray-100">
-        {/* <Nav /> */}
-
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
 
           {/* Header */}
@@ -252,7 +279,10 @@ export default function EventsPage() {
               value={`₦${totalRevenue.toLocaleString()}`}
               icon={
                 <svg className="w-6 h-6 text-[#6b2fa5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
                     d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
@@ -262,10 +292,50 @@ export default function EventsPage() {
             />
           </div>
 
+          {/* Incoming Transfer Banner — only shown when there are pending requests */}
+          {incomingTransfers.length > 0 && (
+            <div className="mb-8 animate-in fade-in slide-in-from-top-2 duration-500">
+              <button
+                onClick={() => setShowTransferDialog(true)}
+                className="w-full bg-gradient-to-r from-[#6b2fa5]/5 via-[#6b2fa5]/10 to-[#6b2fa5]/5 border border-[#6b2fa5]/25 rounded-xl p-4 flex items-center justify-between hover:border-[#6b2fa5]/50 hover:from-[#6b2fa5]/10 hover:to-[#6b2fa5]/10 transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="bg-[#6b2fa5] p-2.5 rounded-lg shadow-sm shadow-[#6b2fa5]/30 group-hover:shadow-md group-hover:shadow-[#6b2fa5]/40 transition-shadow">
+                    <ArrowRightLeft size={18} className="text-white" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-semibold text-[#6b2fa5]">
+                      You've been invited to own{" "}
+                      {incomingTransfers.length === 1
+                        ? "an event"
+                        : `${incomingTransfers.length} events`}
+                    </p>
+                    <p className="text-sm text-[#6b2fa5]/70 mt-0.5">
+                      {incomingTransfers.length === 1
+                        ? `"${incomingTransfers[0].eventName}" from @${incomingTransfers[0].organizerUsername}`
+                        : "Tap to review all pending transfer requests"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="hidden sm:inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#6b2fa5] text-white text-xs font-bold">
+                    {incomingTransfers.length}
+                  </span>
+                  <span className="text-sm font-semibold text-[#6b2fa5] group-hover:translate-x-0.5 transition-transform">
+                    Review →
+                  </span>
+                </div>
+              </button>
+            </div>
+          )}
+
           {/* Search + Filter + Refresh */}
           <div className="mb-8 flex flex-col sm:flex-row gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={20} />
+              <Search
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                size={20}
+              />
               <input
                 type="text"
                 placeholder="Search events by name or venue..."
@@ -295,13 +365,18 @@ export default function EventsPage() {
                 title="Refresh events"
                 className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:border-[#6b2fa5] hover:text-[#6b2fa5] transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <RefreshCw size={16} className={refreshing ? "animate-spin text-[#6b2fa5]" : ""} />
-                <span className="hidden sm:inline">{refreshing ? "Refreshing…" : "Refresh"}</span>
+                <RefreshCw
+                  size={16}
+                  className={refreshing ? "animate-spin text-[#6b2fa5]" : ""}
+                />
+                <span className="hidden sm:inline">
+                  {refreshing ? "Refreshing…" : "Refresh"}
+                </span>
               </button>
 
               {cachedTimeLabel && !refreshing && (
                 <p className="hidden lg:block text-xs text-gray-400 whitespace-nowrap">
-                  Last Refreshed at {cachedTimeLabel}
+                  Last refreshed at {cachedTimeLabel}
                 </p>
               )}
             </div>
@@ -329,13 +404,25 @@ export default function EventsPage() {
           )}
         </main>
       </div>
+
+      {/* Transfer Dialog */}
+      <EventTransferDialog
+        isOpen={showTransferDialog}
+        onClose={() => setShowTransferDialog(false)}
+        transfers={incomingTransfers}
+        onTransferActioned={handleTransferActioned}
+      />
     </>
   )
 }
 
 // ─── StatCard ─────────────────────────────────────────────────────────────────
 function StatCard({
-  label, value, icon, iconBg, valueColor,
+  label,
+  value,
+  icon,
+  iconBg,
+  valueColor,
 }: {
   label: string
   value: string | number

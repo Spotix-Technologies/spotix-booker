@@ -153,9 +153,7 @@ export default function ViewPayoutMethods({
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-semibold text-gray-900">{method.bankName}</p>
                     {method.primary && (
-                      <span className="inline-flex items-center gap-1 text-xs bg-[#6b2fa5] text-white px-2 py-0.5 rounded-full font-medium">
-                        <Star size={10} fill="currentColor" /> Primary
-                      </span>
+                      <Star size={14} fill="#6b2fa5" className="text-[#6b2fa5]" />
                     )}
                   </div>
                   <p className="text-sm text-gray-700 font-medium">{method.accountName}</p>
