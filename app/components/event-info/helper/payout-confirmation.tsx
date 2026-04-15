@@ -92,9 +92,11 @@ export default function PayoutConfirmation({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "rgba(0,0,0,0.45)",
-        backdropFilter: "blur(4px)",
+        background: "rgba(0,0,0,0.5)",
+        backdropFilter: "blur(5px)",
+        WebkitBackdropFilter: "blur(5px)",
         padding: "0 16px",
+        overflow: "auto",
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget && !processing) onClose()

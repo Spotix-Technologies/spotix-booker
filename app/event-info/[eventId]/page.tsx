@@ -175,6 +175,25 @@ export default function EventInfoPage({
   const handleTabSwitch = (tab: TabId) => {
     setActiveTab(tab)
     setLoadedTabs((prev) => new Set([...Array.from(prev), tab]))
+    
+    // Fetch forecast when weather tab is loaded
+    if (tab === "weather" && !forecast) {
+      fetchForecast()
+    }
+  }
+
+  async function fetchForecast() {
+    try {
+      const res = await fetch(`/api/forecast?eventId=${eventId}`)
+      if (!res.ok) {
+        console.error("[fetchForecast] API error:", res.status)
+        return
+      }
+      const data = await res.json()
+      setForecast(data)
+    } catch (err) {
+      console.error("[fetchForecast]", err)
+    }
   }
 
   // ── Auth -> fetch ──────────────────────────────────────────────────────────
