@@ -1,3 +1,5 @@
+// components/event-info/helper/CreatePayoutMethod.tsx
+
 "use client"
 
 import { useState, useEffect, useRef } from "react"
@@ -34,6 +36,8 @@ export default function CreatePayoutMethod({ userId, onCreated, onCancel }: Crea
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const dropdownRef = useRef<HTMLDivElement>(null)
+  // Track whether the current bankQuery value came from a selection (not manual typing)
+  const isSelecting = useRef(false)
 
   // ── Fetch banks from Paystack via our API ──────────────────────────────────
   useEffect(() => {
@@ -56,6 +60,12 @@ export default function CreatePayoutMethod({ userId, onCreated, onCancel }: Crea
 
   // ── Filter banks as user types ─────────────────────────────────────────────
   useEffect(() => {
+    // If the query change came from handleBankSelect, skip filtering entirely
+    if (isSelecting.current) {
+      isSelecting.current = false
+      return
+    }
+
     if (!bankQuery.trim()) {
       setFilteredBanks([])
       setShowDropdown(false)
@@ -86,9 +96,12 @@ export default function CreatePayoutMethod({ userId, onCreated, onCancel }: Crea
   }, [accountNumber, selectedBank])
 
   const handleBankSelect = (bank: Bank) => {
+    // Set the flag so the bankQuery useEffect skips reopening the dropdown
+    isSelecting.current = true
     setSelectedBank(bank)
     setBankQuery(bank.name)
     setShowDropdown(false)
+    setFilteredBanks([])
   }
 
   const handleVerify = async () => {
@@ -112,7 +125,7 @@ export default function CreatePayoutMethod({ userId, onCreated, onCancel }: Crea
 
       const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL
       const res = await fetch(
-        `${BACKEND_URL}/v1/verify?accountNumber=${accountNumber}&bankName=${encodeURIComponent(selectedBank.name)}&bankCode=${selectedBank.code}`,
+        `${BACKEND_URL}/v1/verify?accountNumber=${accountNumber}&bankCode=${encodeURIComponent(selectedBank.code)}`,
         {
           method: "GET",
           headers: { Authorization: `Bearer ${idToken}` },
@@ -183,7 +196,9 @@ export default function CreatePayoutMethod({ userId, onCreated, onCancel }: Crea
           className={inputBase}
         />
         {accountNumber.length > 0 && accountNumber.length < 10 && (
-          <p className="text-xs text-amber-600">{10 - accountNumber.length} more digit{10 - accountNumber.length !== 1 ? "s" : ""} needed</p>
+          <p className="text-xs text-amber-600">
+            {10 - accountNumber.length} more digit{10 - accountNumber.length !== 1 ? "s" : ""} needed
+          </p>
         )}
       </div>
 
@@ -219,7 +234,12 @@ export default function CreatePayoutMethod({ userId, onCreated, onCancel }: Crea
                 {filteredBanks.map((bank) => (
                   <button
                     key={bank.code}
-                    onClick={() => handleBankSelect(bank)}
+                    // Use onMouseDown so the selection fires before the input's onBlur
+                    // can trigger any outside-click logic
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      handleBankSelect(bank)
+                    }}
                     className="w-full text-left px-4 py-2.5 text-sm text-black hover:bg-purple-50 hover:text-[#6b2fa5] transition-colors"
                   >
                     {bank.name}
