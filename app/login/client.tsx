@@ -8,7 +8,12 @@ import { ParticlesBackground } from "@/components/particles-background"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Mail, Lock, AlertCircle, ArrowRight, Eye, EyeOff } from "lucide-react"
 import Image from "next/image"
-import { storeAccessToken, getDeviceId, collectDeviceMeta } from "@/lib/auth-client"
+import {
+  storeAccessToken,
+  getDeviceId,
+  collectDeviceMeta,
+  scheduleProactiveRefresh,
+} from "@/lib/auth-client"
 import { triggerAuthRefresh, useAuth } from "@/hooks/useAuth"
 
 export default function LoginClient() {
@@ -67,11 +72,18 @@ export default function LoginClient() {
 
       const sessionData = await sessionResponse.json()
 
+      // Store token in memory
       storeAccessToken(sessionData.accessToken)
+
+      // Start the proactive refresh chain.
+      // This schedules a silent refresh ~2 min before the token expires so the
+      // user never gets logged out mid-session. tryRefreshTokens() re-schedules
+      // automatically on every successful refresh, making the chain self-perpetuating.
+      scheduleProactiveRefresh(sessionData.accessToken)
 
       const isBooker = sessionData?.user?.isBooker || false
 
-      // Trigger AuthProvider to re-fetch — the useEffect above handles redirect
+      // Trigger AuthProvider to re-fetch user — the useEffect above handles redirect
       triggerAuthRefresh()
 
       if (!isBooker) {
@@ -241,17 +253,17 @@ export default function LoginClient() {
             </form>
 
             {/* Signup Link */}
-        <p className="text-center text-sm text-slate-500">
-          {"Don't have an account?"}{" "}
-          <a
-            href="https://spotix.com.ng/auth/signup"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[#6b2fa5] font-semibold hover:underline"
-          >
-            Sign up
-          </a>
-        </p>
+            <p className="text-center text-sm text-slate-500">
+              {"Don't have an account?"}{" "}
+              <a
+                href="https://spotix.com.ng/auth/signup"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#6b2fa5] font-semibold hover:underline"
+              >
+                Sign up
+              </a>
+            </p>
           </div>
 
           {/* Footer Note */}

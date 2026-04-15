@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, createContext, useContext, ReactNode, createElement } from "react"
-import { authFetch, getAccessToken, tryRefreshTokens, clearAccessToken } from "@/lib/auth-client"
+import { authFetch, getAccessToken, tryRefreshTokens, clearAccessToken, cancelProactiveRefresh } from "@/lib/auth-client"
 
 type User = {
   id: string
@@ -57,14 +57,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         // Check if we have an access token in memory
         let token = getAccessToken()
-        
-        // If not in memory, try to refresh from the httpOnly cookie
+
+        // If not in memory, try to refresh from the httpOnly cookie.
+        // tryRefreshTokens() internally calls scheduleProactiveRefresh on success,
+        // so the auto-refresh chain starts here on every cold load.
         if (!token) {
           const refreshed = await tryRefreshTokens()
           if (!refreshed) {
             // No valid session
             setLoading(false)
-            // Mark as initialized even if no token
             if (!authInitialized) {
               authInitialized = true
               authInitResolvers.forEach(resolve => resolve())
@@ -77,7 +78,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (!token) {
           setLoading(false)
-          // Mark as initialized
           if (!authInitialized) {
             authInitialized = true
             authInitResolvers.forEach(resolve => resolve())
@@ -98,15 +98,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             isBooker: userData.isBooker,
           })
         } else if (response.status === 401) {
-          // Token is invalid, clear it
+          // Token is invalid and retry already failed inside authFetch — clear state
           clearAccessToken()
+          cancelProactiveRefresh()
           setUser(null)
         }
       } catch (err) {
         console.error("Failed to initialize auth:", err)
       } finally {
         setLoading(false)
-        // Mark as initialized after first attempt completes
         if (!authInitialized) {
           authInitialized = true
           authInitResolvers.forEach(resolve => resolve())
@@ -128,6 +128,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     return () => {
       authRefreshListeners = authRefreshListeners.filter(cb => cb !== handleAuthRefresh)
+    }
+  }, [])
+
+  // Listen for session expiry events fired by authFetch / proactive refresh scheduler
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      clearAccessToken()
+      cancelProactiveRefresh()
+      setUser(null)
+      // Redirect to login — preserve current path so user returns after re-auth
+      if (typeof window !== "undefined") {
+        const currentPath = window.location.pathname + window.location.search
+        const loginUrl =
+          currentPath === "/" || currentPath.startsWith("/login")
+            ? "/login"
+            : `/login?redirect=${encodeURIComponent(currentPath)}`
+        window.location.replace(loginUrl)
+      }
+    }
+
+    window.addEventListener("spotix:session-expired", handleSessionExpired)
+
+    return () => {
+      window.removeEventListener("spotix:session-expired", handleSessionExpired)
     }
   }, [])
 

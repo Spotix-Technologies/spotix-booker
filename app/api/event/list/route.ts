@@ -177,7 +177,7 @@ function shapeEvent(id: string, data: FirebaseFirestore.DocumentData, now: Date)
     isFree:        data.isFree       ?? false,
     ticketsSold:   data.ticketsSold  ?? 0,
     totalCapacity: data.enableMaxSize ? parseInt(data.maxSize, 10) : null,
-    revenue:       data.revenue      ?? 0,
+    revenue:       data.totalRevenue      ?? 0,
     status:        mapStatus(data.status, isPast),
     eventVenue:    data.eventVenue   ?? "No venue specified",
     hasMaxSize:    data.enableMaxSize ?? false,

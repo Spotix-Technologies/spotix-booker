@@ -1,3 +1,5 @@
+// app/components/logout-dialog.tsx
+
 "use client"
 
 import { useState, useEffect, useCallback } from "react"

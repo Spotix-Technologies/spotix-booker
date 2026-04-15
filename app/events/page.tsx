@@ -301,7 +301,7 @@ export default function EventsPage() {
 
               {cachedTimeLabel && !refreshing && (
                 <p className="hidden lg:block text-xs text-gray-400 whitespace-nowrap">
-                  Cached at {cachedTimeLabel}
+                  Last Refreshed at {cachedTimeLabel}
                 </p>
               )}
             </div>

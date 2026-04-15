@@ -258,7 +258,7 @@ export default function DashboardPage() {
           {servedFromCache && lastRefreshed && (
             <div className="mb-4 flex items-center justify-between text-xs text-slate-400 px-1">
               <span>
-                Showing cached data from {lastRefreshed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.
+                Showing saved data from {lastRefreshed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.
                 Auto-refreshes every 10 min.
               </span>
               <button

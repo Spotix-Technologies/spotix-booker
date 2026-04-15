@@ -145,9 +145,12 @@ export function EventsList({ events, searchQuery, statusFilter, onEventsChange }
             <table className="w-full">
               <thead className="bg-gradient-to-r from-[#6b2fa5] to-purple-600">
                 <tr>
-                  {["Event Name", "Date", "Venue", "Type", "Tickets", "Revenue", "Status", "Actions"].map((h) => (
+                  {["Event Name", "Date", "Venue", "Type", "Tickets", "Revenue", "Status"].map((h) => (
                     <th key={h} className="px-6 py-4 text-left text-sm font-bold text-white">{h}</th>
                   ))}
+                  <th className="px-6 py-4 text-left text-sm font-bold text-white w-[120px] min-w-[120px]">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -194,8 +197,11 @@ export function EventsList({ events, searchQuery, statusFilter, onEventsChange }
                       </td>
 
                       {/* ── Actions ── */}
-                      <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1">
+                      <td
+                        className="px-6 py-4 w-[120px] min-w-[120px]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center gap-1 w-full overflow-hidden">
 
                           {/* View */}
                           <ActionButton
