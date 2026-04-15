@@ -24,6 +24,7 @@ import EventLinkTab from "@/components/event-info/event-link-tab"
 import FormTab from "@/components/event-info/form-tab"
 import ResponsesTab from "@/components/event-info/responses-tab"
 import WeatherTab, { ForecastBadge } from "@/components/event-info/weather-tab"
+import TransferTab from "@/components/event-info/transfer-tab"
 import type { ForecastData } from "@/components/event-info/weather-tab"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -111,7 +112,7 @@ function TabSkeleton() {
 // ── Tab config ─────────────────────────────────────────────────────────────────
 const TAB_LIST = [
   "overview", "eventlink", "payouts", "attendees",
-  "discounts", "merch", "referrals", "form", "responses", "weather", "edit",
+  "discounts", "merch", "referrals", "form", "responses", "weather", "transfer", "edit",
 ] as const
 
 type TabId = typeof TAB_LIST[number]
@@ -127,6 +128,7 @@ const TAB_LABELS: Record<TabId, string> = {
   payouts:   "Payouts",
   responses: "Responses",
   weather:   "Weather",
+  transfer:  "Transfer Event",
   edit:      "Edit Event",
 }
 
@@ -161,6 +163,7 @@ export default function EventInfoPage({
   })
   const [activeTab, setActiveTab]         = useState<TabId>("overview")
   const [loadedTabs, setLoadedTabs]       = useState<Set<string>>(new Set(["overview"]))
+  const [userAccessToken, setUserAccessToken] = useState<string>("")
   const [newDiscount, setNewDiscount]     = useState<DiscountData>({
     code: "", type: "percentage", value: 0, maxUses: 1, usedCount: 0, active: true,
   })
@@ -175,25 +178,6 @@ export default function EventInfoPage({
   const handleTabSwitch = (tab: TabId) => {
     setActiveTab(tab)
     setLoadedTabs((prev) => new Set([...Array.from(prev), tab]))
-    
-    // Fetch forecast when weather tab is loaded
-    if (tab === "weather" && !forecast) {
-      fetchForecast()
-    }
-  }
-
-  async function fetchForecast() {
-    try {
-      const res = await fetch(`/api/forecast?eventId=${eventId}`)
-      if (!res.ok) {
-        console.error("[fetchForecast] API error:", res.status)
-        return
-      }
-      const data = await res.json()
-      setForecast(data)
-    } catch (err) {
-      console.error("[fetchForecast]", err)
-    }
   }
 
   // ── Auth -> fetch ──────────────────────────────────────────────────────────
@@ -207,7 +191,9 @@ export default function EventInfoPage({
             router.push("/login")
             return
           }
+          token = getAccessToken()
         }
+        if (token) setUserAccessToken(token)
       } catch (err) {
         console.error("Auth initialization error:", err)
         router.push("/login")
@@ -594,7 +580,18 @@ export default function EventInfoPage({
             )}
 
             {activeTab === "weather" && (
-              <WeatherTab forecast={forecast} />
+              <WeatherTab forecast={forecast} eventId={eventId} />
+            )}
+
+            {activeTab === "transfer" && (
+              loadedTabs.has("transfer") && eventData ? (
+                <TransferTab
+                  eventId={eventId}
+                  organizerId={eventData.createdBy ?? ""}
+                  currentUserId={currentUser?.uid ?? ""}
+                  userAccessToken={userAccessToken}
+                />
+              ) : <TabSkeleton />
             )}
 
             {activeTab === "edit" && (

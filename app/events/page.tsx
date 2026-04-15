@@ -8,7 +8,8 @@ import { Preloader } from "@/components/preloader"
 import { ParticlesBackground } from "@/components/particles-background"
 import { EventsList } from "@/components/events/events-list"
 import { CollaboratedEventsList } from "@/components/events/collaborated-events-list"
-import { Search, Plus, Calendar, TrendingUp, Users, RefreshCw } from "lucide-react"
+import EventTransferDialog from "@/components/event-transfer-dialog"
+import { Search, Plus, Calendar, TrendingUp, Users, RefreshCw, Bell } from "lucide-react"
 import type { EventData, CollaboratedEventData } from "@/types/event"
 
 // ─── Cache helpers ────────────────────────────────────────────────────────────
@@ -57,6 +58,8 @@ export default function EventsPage() {
   const [cachedAt, setCachedAt]               = useState<number | null>(null)
   const [searchQuery, setSearchQuery]         = useState("")
   const [statusFilter, setStatusFilter]       = useState("all")
+  const [showTransferDialog, setShowTransferDialog] = useState(false)
+  const [userAccessToken, setUserAccessToken] = useState("")
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -80,6 +83,8 @@ export default function EventsPage() {
           router.push("/login")
           return
         }
+
+        setUserAccessToken(token)
 
         // Fetch user ID from the API
         const userResponse = await authFetch("/api/user/me")
@@ -262,6 +267,25 @@ export default function EventsPage() {
             />
           </div>
 
+          {/* Transfer Requests Banner */}
+          <div className="mb-8">
+            <button
+              onClick={() => setShowTransferDialog(true)}
+              className="w-full bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-xl p-4 flex items-center justify-between hover:from-blue-100 hover:to-blue-200 transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-600 p-2 rounded-lg">
+                  <Bell size={18} className="text-white" />
+                </div>
+                <div className="text-left">
+                  <p className="font-semibold text-blue-900">Event Transfer Requests</p>
+                  <p className="text-sm text-blue-800">Check pending transfer requests from event organizers</p>
+                </div>
+              </div>
+              <span className="text-sm font-semibold text-blue-600">View →</span>
+            </button>
+          </div>
+
           {/* Search + Filter + Refresh */}
           <div className="mb-8 flex flex-col sm:flex-row gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <div className="flex-1 relative">
@@ -329,6 +353,14 @@ export default function EventsPage() {
           )}
         </main>
       </div>
+
+      {/* Transfer Dialog */}
+      <EventTransferDialog
+        isOpen={showTransferDialog}
+        onClose={() => setShowTransferDialog(false)}
+        userId={userId ?? ""}
+        userAccessToken={userAccessToken}
+      />
     </>
   )
 }
