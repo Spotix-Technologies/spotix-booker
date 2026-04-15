@@ -37,28 +37,35 @@ export async function GET(req: NextRequest) {
 
     const data = docSnap.data()
 
+    if (!data) {
+      return NextResponse.json(
+        { error: "Forecast document exists but has no data" },
+        { status: 500 }
+      )
+    }
+
     // Transform Firestore data to match ForecastData interface
     const response = {
       status: data.status || "pending",
       forecast: data.forecast
         ? {
-            weathercode: data.forecast.weathercode,
-            tempMax: data.forecast.tempMax,
-            tempMin: data.forecast.tempMin,
-            precipitationMm: data.forecast.precipitationMm,
-            units: data.units,
-            resolvedCoordinates: data.resolvedCoordinates,
-          }
+          weathercode: data.forecast.weathercode,
+          tempMax: data.forecast.tempMax,
+          tempMin: data.forecast.tempMin,
+          precipitationMm: data.forecast.precipitationMm,
+          units: data.units,
+          resolvedCoordinates: data.resolvedCoordinates,
+        }
         : null,
       processedAt: data.processedAt ? new Date(data.processedAt).toISOString() : null,
       skipReason: data.skipReason || null,
       error: data.error || null,
       eventLocation: data.eventLocation
         ? {
-            lat: data.eventLocation.lat || null,
-            lng: data.eventLocation.lng || null,
-            city: data.eventLocation.city || "",
-          }
+          lat: data.eventLocation.lat || null,
+          lng: data.eventLocation.lng || null,
+          city: data.eventLocation.city || "",
+        }
         : null,
       eventDate: data.eventDate || null,
     }
