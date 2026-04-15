@@ -224,20 +224,35 @@ interface TxnCardProps {
   onPayout: (txn: DailyTransaction) => void
   onAddMethod: () => void
   hasMethods: boolean
+  isSelected?: boolean
+  onToggleSelect?: (date: string) => void
 }
 
-function TxnCard({ txn, payoutStatus, onPayout, onAddMethod, hasMethods }: TxnCardProps) {
+function TxnCard({ txn, payoutStatus, onPayout, onAddMethod, hasMethods, isSelected, onToggleSelect }: TxnCardProps) {
   const canWithdraw = isWithdrawable(txn.updatedAt)
   const timeLeft = timeUntilWithdrawable(txn.updatedAt)
   const progress = unlockProgress(txn.updatedAt)
   const badge = payoutStatus ? (STATUS_BADGE[payoutStatus] ?? STATUS_BADGE.pending) : null
+  const isEligibleForBulk = !payoutStatus && canWithdraw
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow space-y-4">
+    <div className={`bg-white border rounded-xl p-5 hover:shadow-md transition-all space-y-4 ${
+      isSelected && isEligibleForBulk
+        ? "border-[#6b2fa5] bg-purple-50/30"
+        : "border-gray-200"
+    }`}>
       {/* Top row */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div className="space-y-1.5 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
+            {isEligibleForBulk && onToggleSelect && (
+              <input
+                type="checkbox"
+                checked={isSelected ?? false}
+                onChange={() => onToggleSelect(txn.date)}
+                className="w-4 h-4 rounded border-gray-300 accent-[#6b2fa5] cursor-pointer"
+              />
+            )}
             <span className="font-bold text-gray-900 text-base">{txn.date}</span>
 
             {/* Existing payout status badge */}
@@ -364,6 +379,8 @@ export default function PayoutsTab({
   const [activeView, setActiveView] = useState<ActiveView>("transactions")
   const [dialogTxn, setDialogTxn] = useState<DailyTransaction | null>(null)
   const [payoutError, setPayoutError] = useState<PayoutError | null>(null)
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set())
+  const [isBulkPayoutLoading, setIsBulkPayoutLoading] = useState(false)
 
   // Live ticker for countdown timers
   const [, setTick] = useState(0)
@@ -442,6 +459,53 @@ export default function PayoutsTab({
 
   function handlePayoutError(rawMessage: string, txnDate: string) {
     setPayoutError(classifyPayoutError(rawMessage, txnDate))
+  }
+
+  async function handleBulkPayout() {
+    if (selectedDates.size === 0) return
+
+    setIsBulkPayoutLoading(true)
+    const datesToProcess = Array.from(selectedDates)
+    let successCount = 0
+    let failureCount = 0
+    let lastErrorMessage = ""
+
+    for (const date of datesToProcess) {
+      try {
+        const res = await fetch("/api/payout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventId,
+            date,
+            amount: transactions.find((t) => t.date === date)?.ticketSales ?? 0,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          failureCount++
+          lastErrorMessage = data.error || "Payout request failed"
+        } else {
+          successCount++
+          setPayoutStatuses((prev) => ({ ...prev, [date]: "pending" }))
+        }
+      } catch (err: any) {
+        failureCount++
+        lastErrorMessage = err.message || "Network error"
+      }
+    }
+
+    setIsBulkPayoutLoading(false)
+    setSelectedDates(new Set())
+
+    if (failureCount > 0) {
+      setPayoutError({
+        kind: "generic",
+        reason: `${successCount} payout(s) submitted, ${failureCount} failed. Last error: ${lastErrorMessage}`,
+      })
+    } else if (successCount > 0) {
+      // Success — no error banner needed, optimistic update already applied
+    }
   }
 
   return (
@@ -528,7 +592,7 @@ export default function PayoutsTab({
       )}
 
       {/* ── View Toggle ───────────────────────────────────────────────────── */}
-      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
+      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto overflow-y-hidden">
         <button
           onClick={() => setActiveView("transactions")}
           className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px flex items-center gap-2 whitespace-nowrap ${
@@ -611,7 +675,39 @@ export default function PayoutsTab({
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* Bulk payout checklist banner */}
+              {methods.length > 0 && (
+                <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-purple-900">Bulk Payout</p>
+                    <p className="text-xs text-purple-700 mt-0.5">
+                      Select multiple available days to pay into your primary account at once
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleBulkPayout}
+                    disabled={selectedDates.size === 0 || isBulkPayoutLoading}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors flex items-center gap-2 ${
+                      selectedDates.size > 0 && !isBulkPayoutLoading
+                        ? "bg-[#6b2fa5] text-white hover:bg-[#5a2589]"
+                        : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    }`}
+                  >
+                    {isBulkPayoutLoading ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        Payout {selectedDates.size > 0 ? `(${selectedDates.size})` : ""}
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
               {transactions.map((txn) => (
                 <TxnCard
                   key={txn.date}
@@ -620,6 +716,16 @@ export default function PayoutsTab({
                   hasMethods={methods.length > 0}
                   onPayout={(t) => setDialogTxn(t)}
                   onAddMethod={() => setActiveView("methods")}
+                  isSelected={selectedDates.has(txn.date)}
+                  onToggleSelect={(date) => {
+                    const newSelected = new Set(selectedDates)
+                    if (newSelected.has(date)) {
+                      newSelected.delete(date)
+                    } else {
+                      newSelected.add(date)
+                    }
+                    setSelectedDates(newSelected)
+                  }}
                 />
               ))}
             </div>

@@ -247,12 +247,30 @@ export async function POST(req: NextRequest) {
   }
 
 
+  // ── 10. Fetch event name from admin/events/{eventId}/{date} ───────────────
+  let eventName = ""
+  try {
+    const eventDocRef = adminDb
+      .collection("admin")
+      .doc("events")
+      .collection(eventId)
+      .doc(date)
+    const eventDocSnap = await eventDocRef.get()
+    if (eventDocSnap.exists) {
+      eventName = eventDocSnap.data()?.eventName ?? ""
+    }
+  } catch (err) {
+    console.warn("[POST /api/payout] failed to fetch eventName:", err)
+    // Non-critical — proceed without eventName
+  }
+
   try {
     const payoutRef = await adminDb.collection("payouts").add({
   eventId,
   userId,
   date,
   amount,
+  eventName,
   methodId,                              
   bankName: primaryMethod.bankName ?? "",
   bankCode: primaryMethod.bankCode ?? "",
