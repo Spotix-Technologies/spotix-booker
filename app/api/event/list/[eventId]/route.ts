@@ -273,37 +273,8 @@ export async function GET(
     revenue: data.revenue 
   }))
 
-  // ── Weather forecast ───────────────────────────────────────────────────────
-  let forecast: object | null = null
-  try {
-    const forecastSnap = await adminDb.collection("forecasts").doc(eventId).get()
-    if (forecastSnap.exists) {
-      const f = forecastSnap.data()!
-      if (f.status !== "pending" && f.weather) {
-        forecast = {
-          status: f.status,
-          fetchedAt: f.fetchedAt
-            ? (f.fetchedAt.toDate?.() ?? new Date(f.fetchedAt)).toISOString()
-            : null,
-          eventDate: f.eventDate ?? null,
-          eventLocation: f.eventLocation ?? null,
-          weather: f.weather,
-          summary: f.summary ?? null,
-        }
-      } else {
-        forecast = {
-          status: f.status ?? "pending",
-          fetchedAt: null,
-          weather: null,
-          summary: null,
-          eventLocation: f.eventLocation ?? null,
-          eventDate: f.eventDate ?? null,
-        }
-      }
-    }
-  } catch (e) {
-    console.error("[GET eventId] forecast fetch failed", e)
-  }
+  // Note: forecast is intentionally excluded here.
+  // WeatherTab fetches /api/forecast on demand when the tab is selected.
 
   return ok({
     eventData,
@@ -316,7 +287,6 @@ export async function GET(
     ticketTypeData: ticketSalesByType,
     availableBalance: availableRevenue,
     totalPaidOut,
-    forecast,
   })
 }
 

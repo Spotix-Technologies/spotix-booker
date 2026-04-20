@@ -63,6 +63,7 @@ export default function PayoutConfirmation({
             eventId,
             date: txn.date,
             amount: txn.ticketSales,
+            methodId: selectedMethodId,
           }),
         })
         const data = await res.json()

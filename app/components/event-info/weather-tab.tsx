@@ -135,34 +135,47 @@ function StatCard({
   )
 }
 
-// ── Main component ─────────────────────────────────────────────────────────────
+// ── Main component ──────────────────────────────────────────────────────────────────────────────
 export default function WeatherTab({
-  forecast: initialForecast,
   eventId,
 }: {
-  forecast: ForecastData | null
-  eventId?: string
+  eventId: string
 }) {
-  const [forecast, setForecast] = useState<ForecastData | null>(initialForecast)
-  const [loading, setLoading] = useState(false)
+  const [forecast, setForecast] = useState<ForecastData | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  // Lazy load forecast when component mounts if not already loaded
+  // Fetch forecast unconditionally on mount.
+  // This component is only mounted when the weather tab is selected,
+  // so the API request fires exactly at tab-selection time.
   useEffect(() => {
-    if (!forecast && eventId && !loading) {
-      setLoading(true)
-      fetch(`/api/forecast?eventId=${eventId}`)
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch forecast")
-          return res.json()
-        })
-        .then((data) => setForecast(data))
-        .catch((err) => {
-          console.error("[WeatherTab] forecast fetch failed:", err)
-          // Don't set forecast on error; the UI will show pending state
-        })
-        .finally(() => setLoading(false))
-    }
-  }, [eventId, forecast, loading])
+    if (!eventId) { setLoading(false); return }
+    setLoading(true)
+    fetch(`/api/forecast?eventId=${eventId}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch forecast")
+        return res.json()
+      })
+      .then((data) => setForecast(data))
+      .catch((err) => {
+        console.error("[WeatherTab] forecast fetch failed:", err)
+      })
+      .finally(() => setLoading(false))
+  }, [eventId])
+
+  // -- Loading ----------------------------------------------------------------
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center">
+          <span className="w-7 h-7 border-3 border-blue-200 border-t-blue-500 rounded-full animate-spin inline-block" style={{ borderWidth: "3px" }} />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-slate-700 mb-1">Loading Forecast...</h3>
+          <p className="text-sm text-slate-500">Fetching weather data for this event.</p>
+        </div>
+      </div>
+    )
+  }
 
   // -- Pending ----------------------------------------------------------------
   if (!forecast || forecast.status === "pending") {

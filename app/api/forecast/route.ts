@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
             resolvedCoordinates: data.resolvedCoordinates,
           }
         : null,
-      processedAt: data.processedAt ? new Date(data.processedAt).toISOString() : null,
+      processedAt: data.processedAt ? (data.processedAt.toDate?.() ?? new Date(data.processedAt)).toISOString() : null,
       skipReason: data.skipReason || null,
       error: data.error || null,
       eventLocation: data.eventLocation

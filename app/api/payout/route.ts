@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
     return fail("Invalid JSON body", 400)
   }
 
-  const { eventId, date, amount } = body
+  const { eventId, date, amount, methodId: requestedMethodId } = body
   if (!eventId?.trim()) return fail("eventId is required", 400)
   if (!date?.trim()) return fail("date is required", 400)
   if (amount === undefined || amount === null) return fail("amount is required", 400)
@@ -215,22 +215,42 @@ export async function POST(req: NextRequest) {
     return fail(reason, 403)
   }
 
-  // ── 8. Primary payout method ───────────────────────────────────────────────
-  const methodsSnap = await adminDb
-    .collection("payoutMethods")
-    .doc(userId)
-    .collection("methods")
-    .where("primary", "==", true)
-    .limit(1)
-    .get()
+  // ── 8. Payout method — use user-selected method if provided, else primary ──
+  let methodDoc: FirebaseFirestore.DocumentSnapshot | null = null
 
-  if (methodsSnap.empty) {
-    return fail("No primary payout method found. Please add and set a primary bank account.", 400)
+  if (requestedMethodId?.trim()) {
+    // User explicitly selected a method — verify it belongs to them
+    const specificSnap = await adminDb
+      .collection("payoutMethods")
+      .doc(userId)
+      .collection("methods")
+      .doc(requestedMethodId.trim())
+      .get()
+    if (specificSnap.exists) {
+      methodDoc = specificSnap
+    }
   }
 
-  const methodDoc = methodsSnap.docs[0]
-  const primaryMethod = methodDoc.data()
-  const methodId = methodDoc.id  
+  if (!methodDoc) {
+    // Fall back to primary method
+    const primarySnap = await adminDb
+      .collection("payoutMethods")
+      .doc(userId)
+      .collection("methods")
+      .where("primary", "==", true)
+      .limit(1)
+      .get()
+    if (!primarySnap.empty) {
+      methodDoc = primarySnap.docs[0]
+    }
+  }
+
+  if (!methodDoc) {
+    return fail("No payout method found. Please add a bank account first.", 400)
+  }
+
+  const primaryMethod = methodDoc.data()!
+  const methodId = methodDoc.id
 
 
   // ── 9. Duplicate guard ────────────────────────────────────────────────────

@@ -129,24 +129,27 @@ async function handleOwned(userId: string) {
 
 // ─── Collaborated events ──────────────────────────────────────────────────────
 async function handleCollaborated(userId: string) {
+  // Query single field only — filter isActive in memory to avoid composite index
   const collabSnap = await adminDb
     .collection("collaborations")
     .where("collaboratorId", "==", userId)
-    .where("isActive", "==", true)
     .get()
 
-  if (collabSnap.empty) return ok({ events: [] })
+  const activeDocs = collabSnap.docs.filter((d) => d.data().isActive === true)
+  if (activeDocs.length === 0) return ok({ events: [] })
 
   const now = new Date()
 
-  const fetches = collabSnap.docs.map(async (collabDoc) => {
+  const fetches = activeDocs.map(async (collabDoc) => {
     const { eventId, ownerId, role } = collabDoc.data()
     try {
       const eventDoc = await adminDb.collection("events").doc(eventId).get()
       if (!eventDoc.exists) return null
 
       const data = eventDoc.data()!
-      if (data.enabledCollaboration !== true) return null
+      // Collaboration permission is validated at creation time (owner must have
+      // enabledCollaboration on their user doc). The active collab doc is
+      // sufficient proof — no need to re-check the event doc here.
 
       return {
         ...shapeEvent(eventDoc.id, data, now),

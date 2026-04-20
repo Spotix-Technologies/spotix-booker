@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
       isBooker: userData.isBooker || userData.role === "booker",
       isVerified: userData.isVerified || false,
       createdAt: userData.createdAt || new Date().toISOString(),
+      enabledCollaboration: userData.enabledCollaboration || false,
     })
   } catch (error) {
     console.error("Error fetching user:", error)
