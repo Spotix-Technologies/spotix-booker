@@ -4,8 +4,8 @@
  * POST /api/auth/login  — Email/password login endpoint
  *
  * Accepts email and password directly (no Firebase Client SDK needed).
- * Uses Firebase Admin SDK to authenticate, then issues our access + refresh tokens.
- * This allows the frontend to completely avoid importing the Firebase SDK.
+ * Uses Firebase Admin SDK + the Firebase REST API to authenticate,
+ * then issues our access + refresh tokens.
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -55,13 +55,7 @@ export async function POST(request: NextRequest) {
       return err("INVALID_INPUT", "Device information is required", 400)
     }
 
-    // Use Firebase Admin SDK to authenticate the user
-    // Note: Firebase Admin SDK doesn't have a direct way to authenticate with email/password
-    // instead, we need to use the Firebase REST API or store credentials securely
-    // For now, we'll assume credentials validation happens via a secure service
-    // and use this endpoint structure for future enhancement
-
-    // Step 1: Verify email/password combination via Firebase REST API
+    // Step 1: Verify email/password via Firebase REST API
     const firebaseApiKey = process.env.FIREBASE_API_KEY
     if (!firebaseApiKey) {
       console.error("Missing FIREBASE_API_KEY environment variable")
@@ -76,11 +70,7 @@ export async function POST(request: NextRequest) {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email,
-            password,
-            returnSecureToken: true,
-          }),
+          body: JSON.stringify({ email, password, returnSecureToken: true }),
         }
       )
 
@@ -88,44 +78,24 @@ export async function POST(request: NextRequest) {
         const firebaseError = await firebaseResponse.json()
         console.warn("Firebase login failed:", firebaseError)
 
-        if (
-          firebaseError.error?.message?.includes("INVALID_LOGIN_CREDENTIALS") ||
-          firebaseError.error?.message?.includes("INVALID_PASSWORD") ||
-          firebaseError.error?.message?.includes("EMAIL_NOT_FOUND")
-        ) {
-          return err(
-            "INVALID_CREDENTIALS",
-            "Incorrect email or password",
-            401
-          )
-        } else if (firebaseError.error?.message?.includes("USER_DISABLED")) {
-          return err("USER_DISABLED", "This account has been disabled", 403)
-        } else if (
-          firebaseError.error?.message?.includes("TOO_MANY_ATTEMPTS_TRY_LATER")
-        ) {
-          return err(
-            "TOO_MANY_REQUESTS",
-            "Too many failed login attempts. Please try again later",
-            429
-          )
+        const msg: string = firebaseError.error?.message ?? ""
+        if (msg.includes("INVALID_LOGIN_CREDENTIALS") || msg.includes("INVALID_PASSWORD") || msg.includes("EMAIL_NOT_FOUND")) {
+          return err("INVALID_CREDENTIALS", "Incorrect email or password", 401)
         }
-
-        return err(
-          "AUTH_FAILED",
-          firebaseError.error?.message || "Authentication failed",
-          401
-        )
+        if (msg.includes("USER_DISABLED")) {
+          return err("USER_DISABLED", "This account has been disabled", 403)
+        }
+        if (msg.includes("TOO_MANY_ATTEMPTS_TRY_LATER")) {
+          return err("TOO_MANY_REQUESTS", "Too many failed login attempts. Please try again later", 429)
+        }
+        return err("AUTH_FAILED", msg || "Authentication failed", 401)
       }
 
       const firebaseData = await firebaseResponse.json()
       userId = firebaseData.localId
     } catch (firebaseErr) {
       console.error("Firebase authentication error:", firebaseErr)
-      return err(
-        "SERVER_ERROR",
-        "Failed to authenticate with Firebase",
-        500
-      )
+      return err("SERVER_ERROR", "Failed to authenticate with Firebase", 500)
     }
 
     // Step 2: Fetch user document to check if they're a booker
@@ -141,12 +111,12 @@ export async function POST(request: NextRequest) {
       return err("SERVER_ERROR", "Failed to load user profile", 500)
     }
 
-    // Step 3: Revoke any existing tokens for this device (login invalidates other sessions on same device)
+    // Step 3: Revoke any existing tokens for this device
     try {
       await revokeActiveTokensForDevice(userId, deviceId)
     } catch (revokeErr) {
       console.warn("Failed to revoke previous device tokens:", revokeErr)
-      // Continue anyway — token revocation failure shouldn't block login
+      // Non-fatal — continue
     }
 
     // Step 4: Issue new access and refresh tokens
@@ -154,34 +124,26 @@ export async function POST(request: NextRequest) {
     let refreshTokenRecord: { token: string; id: string }
 
     try {
-      // Sign access token
       const deviceMeta_: DeviceMeta = deviceMeta as DeviceMeta
-// AFTER
-    accessToken = await signAccessToken(
-    {
-        uid: userId,
-        email: userData.email || email,
-        isBooker: userData.isBooker ?? userData.role === "booker",
-        deviceId,
-    },
-    "spotix-booker"
-    )
 
-const issued = await issueRefreshToken(userId, deviceId, deviceMeta_)
-refreshTokenRecord = {
-  token: issued.rawToken,  // adjust key names to match IssueTokenResult
-  id: issued.tokenId,
-}
+      accessToken = await signAccessToken(
+        {
+          uid: userId,
+          email: userData.email || email,
+          isBooker: userData.isBooker ?? userData.role === "booker",
+          deviceId,
+        },
+        "spotix-booker"
+      )
+
+      const issued = await issueRefreshToken(userId, deviceId, deviceMeta_)
+      refreshTokenRecord = { token: issued.rawToken, id: issued.tokenId }
     } catch (tokenErr) {
       console.error("Token generation error:", tokenErr)
-      return err(
-        "SERVER_ERROR",
-        "Failed to generate authentication tokens",
-        500
-      )
+      return err("SERVER_ERROR", "Failed to generate authentication tokens", 500)
     }
 
-    // Step 5: Prepare response with cookies and body
+    // Step 5: Build response with cookies and body
     const response = ok(
       {
         user: {
@@ -197,18 +159,11 @@ refreshTokenRecord = {
       200
     )
 
-    // Set authentication cookies
-    setAuthCookies(
-      response,
-      accessToken,
-      refreshTokenRecord.token,
-      refreshTokenRecord.id
-    )
+    setAuthCookies(response, accessToken, refreshTokenRecord.token, refreshTokenRecord.id)
 
     return response
-// AFTER
-} catch (caughtErr) {
-  console.error("Login endpoint error:", caughtErr)
-  return err("SERVER_ERROR", "An unexpected error occurred during login", 500)
-}
+  } catch (caughtErr) {
+    console.error("Login endpoint error:", caughtErr)
+    return err("SERVER_ERROR", "An unexpected error occurred during login", 500)
+  }
 }

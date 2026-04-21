@@ -5,7 +5,7 @@ import { useMemo, use, useState, useEffect, useRef, Suspense } from "react"
 import type React from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { tryRefreshTokens, getAccessToken } from "@/lib/auth-client"
+import { tryRefreshTokens, getAccessToken, authFetch } from "@/lib/auth-client"
 import { auth } from "@/lib/firebase"
 import { onAuthStateChanged } from "firebase/auth"
 import { ArrowLeft, RefreshCw, LogOut, Shield, UserCheck, Calculator, AlertTriangle, Settings } from "lucide-react"
@@ -75,7 +75,6 @@ interface CollabInfo {
 }
 
 // ── Built-in role → allowed tab IDs ───────────────────────────────────────────
-// These are the SOURCE OF TRUTH — no Firestore lookup needed for built-in roles.
 const BUILT_IN_ROLE_TABS: Record<string, TabId[]> = {
   admin:      ["overview", "eventlink", "payouts", "attendees", "discounts", "merch", "referrals", "form", "responses", "weather", "transfer"],
   checkin:    ["attendees", "eventlink", "weather", "form", "responses"],
@@ -119,12 +118,10 @@ function resolveVisibleTabs(isOwner: boolean, collab: CollabInfo | null): TabId[
   if (isOwner) return [...ALL_TABS] as TabId[]
   if (!collab) return []
 
-  // Built-in role — use hardcoded template
   if (collab.role in BUILT_IN_ROLE_TABS) {
     return BUILT_IN_ROLE_TABS[collab.role]
   }
 
-  // Custom role — map stored permission IDs to tab IDs
   if (Array.isArray(collab.permissions) && collab.permissions.length > 0) {
     return collab.permissions
       .map((p) => PERMISSION_TO_TAB[p.toLowerCase()])
@@ -199,11 +196,10 @@ function TabSkeleton() {
 
 // ── Inner page (needs useSearchParams) ────────────────────────────────────────
 function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }) {
-  const router      = useRouter()
+  const router       = useRouter()
   const searchParams = useSearchParams()
-  const roleHint    = searchParams.get("role") // ?role= hint from collaborated events list
 
-  const [pageReady, setPageReady]       = useState(false) // replaces loading+accessChecked
+  const [pageReady, setPageReady]       = useState(false)
   const [saving, setSaving]             = useState(false)
   const [refreshing, setRefreshing]     = useState(false)
   const [currentUser, setCurrentUser]   = useState<any>(null)
@@ -229,9 +225,7 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
   const [exitLoading, setExitLoading]     = useState(false)
 
   // Tracks whether Firebase has emitted at least one non-null user.
-  // Lives in a ref so it survives Strict Mode double-effect invocations
-  // and is shared across both listener registrations — preventing the
-  // cold-start null from triggering a redirect on either run.
+  // Lives in a ref so it survives Strict Mode double-effect invocations.
   const firebaseInitialized = useRef(false)
 
   const visibleTabs = useMemo(
@@ -253,7 +247,6 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
   }
 
   function populateEventData(data: any) {
-    console.log("[EventInfo] populateEventData — keys:", Object.keys(data))
     setEventData(data.eventData ?? null)
     setBookerBVT(data.bookerBVT ?? "")
     setAttendees(data.attendees ?? [])
@@ -268,66 +261,12 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
     }
   }
 
-  // ── Main load function ────────────────────────────────────────────────────
-  async function loadPage(uid: string, forceRefresh = false) {
-    console.log("[EventInfo] loadPage — uid:", uid, "eventId:", eventId, "roleHint:", roleHint, "forceRefresh:", forceRefresh)
-
-    try {
-      // ── Try cache (owner path only) ───────────────────────────────────────
-      if (!forceRefresh) {
-        const cached = eventCacheManager.get<any>(`event_${eventId}`)
-        if (cached) {
-          console.log("[EventInfo] Cache hit")
-          const ownerId = cached.eventData?.createdBy
-          if (uid === ownerId) {
-            console.log("[EventInfo] Cache: confirmed owner")
-            populateEventData(cached)
-            setIsOwner(true)
-            const rem = eventCacheManager.getRemainingTime(`event_${eventId}`)
-            setCacheInfo({ isCached: true, remainingTime: rem })
-            setPageReady(true)
-            return
-          }
-          // Different user — don't use owner cache, fall through
-          console.log("[EventInfo] Cache belongs to different owner, skipping")
-        }
-      } else {
-        eventCacheManager.invalidate(`event_${eventId}`)
-        setRefreshing(true)
-      }
-
-      // ── Step 1: try owner API ─────────────────────────────────────────────
-      console.log("[EventInfo] Fetching owner data from /api/event/list/" + eventId)
-      const ownerRes = await fetch(`/api/event/list/${eventId}`)
-      console.log("[EventInfo] Owner fetch status:", ownerRes.status)
-
-      if (ownerRes.ok) {
-        const data = await ownerRes.json()
-        console.log("[EventInfo] Owner fetch success — eventName:", data.eventData?.eventName)
-        eventCacheManager.set(`event_${eventId}`, data)
-        populateEventData(data)
-        setIsOwner(true)
-        setCacheInfo({ isCached: false, remainingTime: null })
-        setPageReady(true)
-        return
-      }
-
-      // ── Step 2: not owner — check collaboration ───────────────────────────
-      console.log("[EventInfo] Not owner (status " + ownerRes.status + "), checking collaboration...")
-      await loadCollabAccess(uid)
-
-    } catch (err) {
-      console.error("[EventInfo] loadPage error:", err)
-    } finally {
-      setRefreshing(false)
-      setPageReady(true) // always unblock the UI
-    }
-  }
-
+  // ── Step 2: collaboration check ───────────────────────────────────────────
   async function loadCollabAccess(uid: string) {
     console.log("[EventInfo] loadCollabAccess — uid:", uid, "eventId:", eventId)
     try {
-      const res = await fetch(`/api/teams?eventId=${eventId}&action=myAccess`)
+      // authFetch auto-attaches Bearer token and retries once on 401
+      const res = await authFetch(`/api/teams?eventId=${eventId}&action=myAccess`)
       console.log("[EventInfo] myAccess status:", res.status)
 
       if (!res.ok) {
@@ -346,21 +285,13 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
       const role: string = data.collaboration.role
       const permissions: string[] | null = data.collaboration.permissions ?? null
 
-      console.log("[EventInfo] Collab role:", role, "permissions:", permissions)
-
-      // Resolve which tabs this role can see
-      let allowedTabs: TabId[]
+      // Resolve default tab for this role
+      let defaultTab: TabId = "overview"
       if (role in BUILT_IN_ROLE_TABS) {
-        allowedTabs = BUILT_IN_ROLE_TABS[role]
-        console.log("[EventInfo] Built-in role tabs:", allowedTabs)
+        defaultTab = BUILT_IN_ROLE_TABS[role][0]
       } else if (Array.isArray(permissions) && permissions.length > 0) {
-        allowedTabs = permissions
-          .map((p) => PERMISSION_TO_TAB[p.toLowerCase()])
-          .filter((t): t is TabId => Boolean(t))
-        console.log("[EventInfo] Custom role tabs:", allowedTabs)
-      } else {
-        allowedTabs = []
-        console.warn("[EventInfo] No permissions resolved for role:", role)
+        const first = PERMISSION_TO_TAB[permissions[0]?.toLowerCase()]
+        if (first) defaultTab = first
       }
 
       setCollabInfo({
@@ -371,33 +302,97 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
       })
 
       populateEventData({
-        eventData:       data.eventData,
-        attendees:       data.attendees ?? [],
-        discounts:       [],
-        payouts:         [],
+        eventData:        data.eventData,
+        attendees:        data.attendees ?? [],
+        discounts:        [],
+        payouts:          [],
         ticketSalesByDay: [],
         ticketSalesByType: [],
         availableBalance: 0,
-        totalPaidOut:    0,
+        totalPaidOut:     0,
       })
 
-      // Set default tab to the first one this role can see
-      if (allowedTabs.length > 0) {
-        console.log("[EventInfo] Setting default tab to:", allowedTabs[0])
-        setActiveTab(allowedTabs[0])
-        setLoadedTabs(new Set([allowedTabs[0]]))
-      }
+      setActiveTab(defaultTab)
+      setLoadedTabs(new Set([defaultTab]))
 
     } catch (err) {
       console.error("[EventInfo] loadCollabAccess error:", err)
     }
   }
 
-  // ── Auth bootstrap ────────────────────────────────────────────────────────
+  // ── Main load function ─────────────────────────────────────────────────────
+  // Called once we have a confirmed Firebase uid.
+  async function loadPage(uid: string, forceRefresh = false) {
+    console.log("[EventInfo] loadPage — uid:", uid, "eventId:", eventId, "forceRefresh:", forceRefresh)
+
+    try {
+      // ── Try cache (owner path only) ─────────────────────────────────────
+      if (!forceRefresh) {
+        const cached = eventCacheManager.get<any>(`event_${eventId}`)
+        if (cached) {
+          const ownerId = cached.eventData?.createdBy
+          if (uid === ownerId) {
+            console.log("[EventInfo] Cache hit — confirmed owner")
+            populateEventData(cached)
+            setIsOwner(true)
+            const rem = eventCacheManager.getRemainingTime(`event_${eventId}`)
+            setCacheInfo({ isCached: true, remainingTime: rem })
+            setPageReady(true)
+            return
+          }
+          console.log("[EventInfo] Cache belongs to different owner, skipping")
+        }
+      } else {
+        eventCacheManager.invalidate(`event_${eventId}`)
+        setRefreshing(true)
+      }
+
+      // ── Step 1: attempt owner fetch ─────────────────────────────────────
+      // authFetch attaches the Bearer token and retries once on 401 with a
+      // refreshed token — no silent 401 failures mid-session.
+      console.log("[EventInfo] Fetching owner data from /api/event/list/" + eventId)
+      const ownerRes = await authFetch(`/api/event/list/${eventId}`)
+      console.log("[EventInfo] Owner fetch status:", ownerRes.status)
+
+      if (ownerRes.ok) {
+        const data = await ownerRes.json()
+        console.log("[EventInfo] Owner fetch success — eventName:", data.eventData?.eventName)
+        eventCacheManager.set(`event_${eventId}`, data)
+        populateEventData(data)
+        setIsOwner(true)
+        setCacheInfo({ isCached: false, remainingTime: null })
+        setPageReady(true)
+        return
+      }
+
+      // ── Step 2: not the owner — check collaborations ────────────────────
+      // Queries collaborations/{collabId} where collaboratorId == uid
+      // and eventId == current eventId. The API returns the event data
+      // filtered to what this role is allowed to see.
+      console.log("[EventInfo] Not owner (status " + ownerRes.status + "), checking collaboration...")
+      await loadCollabAccess(uid)
+
+    } catch (err) {
+      console.error("[EventInfo] loadPage error:", err)
+    } finally {
+      setRefreshing(false)
+      setPageReady(true) // always unblock the UI
+    }
+  }
+
+  // ── Auth bootstrap ─────────────────────────────────────────────────────────
+  //
+  // Strategy: ensure we have a valid access token first (refresh if needed),
+  // then listen for the Firebase user. We use a ref to guard against the
+  // cold-start null that Firebase emits on first tick while restoring the
+  // IndexedDB session.
+  //
+  // We do NOT kick off the page load until we have a confirmed uid because
+  // the API routes need the Bearer token (attached by authFetch) to identify
+  // the caller — there's no point racing the fetch against auth.
   useEffect(() => {
     console.log("[EventInfo] useEffect — setting up auth listener, eventId:", eventId)
 
-    // Ensure we have a token first
     const ensureAuth = async (): Promise<boolean> => {
       try {
         let token = getAccessToken()
@@ -420,19 +415,15 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
     ensureAuth().then((authed) => {
       if (!authed) return
 
-      // Firebase emits null on the very first tick while it restores the
-      // persisted session from IndexedDB. We must not redirect on that
-      // initial null — only redirect once Firebase has confirmed there is
-      // genuinely no signed-in user (i.e. after it has emitted a real user).
-      // firebaseInitialized is a ref so it survives Strict Mode double-invocation.
       unsubscribe = onAuthStateChanged(auth, (user) => {
         console.log("[EventInfo] onAuthStateChanged — user:", user?.uid ?? "null", "initialized:", firebaseInitialized.current)
+
         if (user) {
           firebaseInitialized.current = true
           setCurrentUser(user)
           loadPage(user.uid)
         } else if (firebaseInitialized.current) {
-          // User was signed in before and is now gone — genuine sign-out
+          // User was confirmed signed-in before and is now gone — genuine sign-out
           console.warn("[EventInfo] Firebase user signed out, redirecting to login")
           router.push("/login")
         } else {
@@ -454,14 +445,14 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
     if (currentUser) loadPage(currentUser.uid, true)
   }
 
-  // ── Clipboard ─────────────────────────────────────────────────────────────
+  // ── Clipboard ──────────────────────────────────────────────────────────────
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text)
     setCopiedField(field)
     setTimeout(() => setCopiedField(null), 2000)
   }
 
-  // ── Discounts ─────────────────────────────────────────────────────────────
+  // ── Discounts ──────────────────────────────────────────────────────────────
   const handleDiscountInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
     setNewDiscount((prev) => ({ ...prev, [name]: type === "number" ? Number(value) : value }))
@@ -471,7 +462,7 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
     if (!newDiscount.code.trim()) { alert("Please enter a discount code."); return }
     setSaving(true)
     try {
-      const res  = await fetch(`/api/event/list/${eventId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "addDiscount", ...newDiscount }) })
+      const res  = await authFetch(`/api/event/list/${eventId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "addDiscount", ...newDiscount }) })
       const data = await res.json()
       if (!res.ok) { alert(data.error ?? "Failed to add discount."); return }
       setDiscounts((prev) => [...prev, data.discount])
@@ -486,7 +477,7 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
     if (!target.id) return
     setSaving(true)
     try {
-      const res  = await fetch(`/api/event/list/${eventId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "toggleDiscount", discountId: target.id }) })
+      const res  = await authFetch(`/api/event/list/${eventId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "toggleDiscount", discountId: target.id }) })
       const data = await res.json()
       if (!res.ok) { alert(data.error ?? "Failed."); return }
       setDiscounts((prev) => prev.map((d, i) => i === index ? { ...d, active: data.active } : d))
@@ -494,7 +485,7 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
     finally { setSaving(false) }
   }
 
-  // ── Edit event ────────────────────────────────────────────────────────────
+  // ── Edit event ─────────────────────────────────────────────────────────────
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
     if (type === "checkbox") setEditFormData((p: any) => ({ ...p, [name]: (e.target as HTMLInputElement).checked }))
@@ -513,7 +504,7 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
     e.preventDefault()
     setSaving(true)
     try {
-      const res  = await fetch(`/api/event/list/${eventId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "edit", ...editFormData }) })
+      const res  = await authFetch(`/api/event/list/${eventId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "edit", ...editFormData }) })
       const data = await res.json()
       if (!res.ok) { alert(data.error ?? "Failed to update event."); return }
       setEventData((prev) => prev ? { ...prev, eventName: editFormData.eventName, eventDescription: editFormData.eventDescription, eventDate: editFormData.eventDate, eventEndDate: editFormData.eventEndDate, eventVenue: editFormData.eventVenue, eventStart: editFormData.eventStart, eventEnd: editFormData.eventEnd, eventType: editFormData.eventType, isFree: !editFormData.enablePricing, ticketPrices: editFormData.enablePricing ? editFormData.ticketPrices : [], enableStopDate: editFormData.enableStopDate, stopDate: editFormData.enableStopDate ? editFormData.stopDate : "", enableColorCode: editFormData.enableColorCode, colorCode: editFormData.enableColorCode ? editFormData.colorCode : "", enableMaxSize: editFormData.enableMaxSize, maxSize: editFormData.enableMaxSize ? editFormData.maxSize : "" } : prev)
@@ -523,12 +514,12 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
     finally { setSaving(false) }
   }
 
-  // ── Exit team ─────────────────────────────────────────────────────────────
+  // ── Exit team ──────────────────────────────────────────────────────────────
   async function handleExitTeam() {
     if (!collabInfo) return
     setExitLoading(true)
     try {
-      const res = await fetch("/api/teams", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ collaborationId: collabInfo.collaborationId }) })
+      const res = await authFetch("/api/teams", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ collaborationId: collabInfo.collaborationId }) })
       if (res.ok) { router.push("/events"); return }
       const data = await res.json().catch(() => ({}))
       alert(data.error ?? "Failed to exit team.")
@@ -536,7 +527,7 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
     finally { setExitLoading(false); setExitDialog(false) }
   }
 
-  // ── Loading ───────────────────────────────────────────────────────────────
+  // ── Loading state ──────────────────────────────────────────────────────────
   if (!pageReady) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
@@ -564,7 +555,7 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
     )
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50">
       {exitDialog && (
