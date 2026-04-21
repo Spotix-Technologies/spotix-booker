@@ -1,10 +1,10 @@
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { AuthProvider } from "@/hooks/useAuth"
+import { MaintenanceProvider } from "@/components/MaintenanceProvider"
 import "./globals.css"
 import { Nav } from "@/components/nav"
 import { Footer } from "@/components/footer"
-// import "leaflet/dist/leaflet.css"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -82,21 +82,21 @@ export const metadata: Metadata = {
     ],
     apple: "/xmas.png",
   },
-  verification: {
-    // Add verification codes here when available
-  },
-};
+  verification: {},
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <div className="min-h-screen flex flex-col">
-        <AuthProvider>
-          <Nav />
-          {children}
-          <Footer />
-        </AuthProvider>
+          <AuthProvider>
+            <MaintenanceProvider>
+              <Nav />
+              {children}
+              <Footer />
+            </MaintenanceProvider>
+          </AuthProvider>
         </div>
       </body>
     </html>

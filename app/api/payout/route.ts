@@ -199,8 +199,11 @@ export async function POST(req: NextRequest) {
   // Day names: Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday
   // Document field: isRestricted: true | false, reason?: string
   // Uses noon to avoid DST-related off-by-one on the day boundary
-  const txnDayOfWeek = DAYS[new Date(`${date}T12:00:00`).getDay()]
+// AFTER
+const txnDayOfWeek = DAYS[new Date(`${date}T12:00:00`).getDay()]
+const todayDayOfWeek = DAYS[new Date().getDay()]
 
+if (txnDayOfWeek === todayDayOfWeek) {
   const restrictedDaySnap = await adminDb
     .collection("admin")
     .doc("global")
@@ -214,6 +217,7 @@ export async function POST(req: NextRequest) {
       `Payouts for transactions on ${txnDayOfWeek}s are currently restricted. Please try again later.`
     return fail(reason, 403)
   }
+} 
 
   // ── 8. Payout method — use user-selected method if provided, else primary ──
   let methodDoc: FirebaseFirestore.DocumentSnapshot | null = null

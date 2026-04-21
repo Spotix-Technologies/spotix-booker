@@ -1,7 +1,7 @@
 // app/event-info/[eventId]/page.tsx
 "use client"
 
-import { useMemo, use, useState, useEffect, Suspense } from "react"
+import { useMemo, use, useState, useEffect, useRef, Suspense } from "react"
 import type React from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -228,6 +228,12 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
   const [exitDialog, setExitDialog]       = useState(false)
   const [exitLoading, setExitLoading]     = useState(false)
 
+  // Tracks whether Firebase has emitted at least one non-null user.
+  // Lives in a ref so it survives Strict Mode double-effect invocations
+  // and is shared across both listener registrations — preventing the
+  // cold-start null from triggering a redirect on either run.
+  const firebaseInitialized = useRef(false)
+
   const visibleTabs = useMemo(
     () => resolveVisibleTabs(isOwner, collabInfo),
     [isOwner, collabInfo]
@@ -414,14 +420,26 @@ function EventInfoInner({ eventId, userId }: { eventId: string; userId: string }
     ensureAuth().then((authed) => {
       if (!authed) return
 
+      // Firebase emits null on the very first tick while it restores the
+      // persisted session from IndexedDB. We must not redirect on that
+      // initial null — only redirect once Firebase has confirmed there is
+      // genuinely no signed-in user (i.e. after it has emitted a real user).
+      // firebaseInitialized is a ref so it survives Strict Mode double-invocation.
       unsubscribe = onAuthStateChanged(auth, (user) => {
-        console.log("[EventInfo] onAuthStateChanged — user:", user?.uid ?? "null")
+        console.log("[EventInfo] onAuthStateChanged — user:", user?.uid ?? "null", "initialized:", firebaseInitialized.current)
         if (user) {
+          firebaseInitialized.current = true
           setCurrentUser(user)
           loadPage(user.uid)
-        } else {
-          console.warn("[EventInfo] No Firebase user, redirecting to login")
+        } else if (firebaseInitialized.current) {
+          // User was signed in before and is now gone — genuine sign-out
+          console.warn("[EventInfo] Firebase user signed out, redirecting to login")
           router.push("/login")
+        } else {
+          // First emission is null — Firebase is still restoring the session.
+          // Mark initialized and wait for the next emission.
+          firebaseInitialized.current = true
+          console.log("[EventInfo] Firebase cold-start null — waiting for session restore")
         }
       })
     })
