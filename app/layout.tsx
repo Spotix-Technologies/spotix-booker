@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { AuthProvider } from "@/hooks/useAuth"
-import { MaintenanceProvider } from "@/components/MaintenanceProvider"
+// import { MaintenanceProvider } from "@/components/MaintenanceProvider"
 import "./globals.css"
 import { Nav } from "@/components/nav"
 import { Footer } from "@/components/footer"
@@ -91,11 +91,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <div className="min-h-screen flex flex-col">
           <AuthProvider>
-            <MaintenanceProvider>
+            {/* <MaintenanceProvider> */}
               <Nav />
               {children}
               <Footer />
-            </MaintenanceProvider>
+            {/* </MaintenanceProvider> */}
           </AuthProvider>
         </div>
       </body>
