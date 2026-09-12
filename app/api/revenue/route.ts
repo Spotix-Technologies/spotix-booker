@@ -149,25 +149,29 @@ async function sumDaySales(
 
 export async function GET(request: NextRequest) {
   try {
-    // Resolve user ID from middleware header or cookie fallback
-    let xUserId = request.headers.get("x-user-id")
-    if (!xUserId) {
-      const token = request.cookies.get("spotix_at")?.value
-      if (!token) {
-        return NextResponse.json(
-          { error: "Unauthorized", message: "Not authenticated" },
-          { status: 401 }
-        )
-      }
-      try {
-        const payload = await verifyAccessToken(token, "spotix-booker")
-        xUserId = payload.uid
-      } catch {
-        return NextResponse.json(
-          { error: "Unauthorized", message: "Invalid or expired token" },
-          { status: 401 }
-        )
-      }
+    // Auth: verify the spotix_at cookie server-side. Deliberately does NOT
+    // trust an x-user-id header — this route is reachable directly by any
+    // client, and Next middleware never runs on /api/* here, so nothing
+    // strips a client-forged header before it reaches this handler. (See
+    // app/api/event/one/route.ts and app/api/event/list/route.ts for the
+    // same reasoning — this used to trust that header and let anyone read
+    // anyone else's revenue data just by setting it.)
+    const token = request.cookies.get("spotix_at")?.value
+    if (!token) {
+      return NextResponse.json(
+        { error: "Unauthorized", message: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    let xUserId: string
+    try {
+      const payload = await verifyAccessToken(token, "spotix-booker")
+      xUserId = payload.uid
+    } catch {
+      return NextResponse.json(
+        { error: "Unauthorized", message: "Invalid or expired token" },
+        { status: 401 }
+      )
     }
 
     const userId = request.nextUrl.searchParams.get("userId")

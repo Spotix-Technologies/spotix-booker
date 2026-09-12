@@ -17,7 +17,7 @@
 import { randomUUID } from "crypto"
 import { redis } from "./redis"
 
-export type DraftKind = "poll" | "nomination"
+export type DraftKind = "poll" | "nomination" | "event"
 
 export const DRAFT_TTL_SECONDS = 60 * 60 * 24 * 14 // 14 days
 

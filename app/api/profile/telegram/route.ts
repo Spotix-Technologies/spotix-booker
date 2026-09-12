@@ -101,11 +101,15 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// ─── Shared auth helper (mirrors the bvt route pattern) ──────────────────────
+// ─── Shared auth helper — verifies the spotix_at cookie server-side. Never
+// trusts an x-user-id header: this route is reachable directly by any
+// client and Next middleware never runs on /api/*, so nothing strips a
+// client-forged header before it reaches these handlers. (This used to
+// trust that header outright, which combined with the xUserId !== userId
+// check below being worthless — an attacker controls both sides of that
+// comparison — let anyone mint a Telegram-link token for any victim's
+// account.) ─────────────────────────────────────────────────────────────
 async function resolveUserId(request: NextRequest): Promise<string | null> {
-  const xUserId = request.headers.get("x-user-id")
-  if (xUserId) return xUserId
-
   const token = request.cookies.get("spotix_at")?.value
   if (!token) return null
 

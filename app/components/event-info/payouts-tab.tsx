@@ -21,8 +21,10 @@ import VaultSignoffs from "./helper/vault-signoffs"
 import VaultKeyEnterOnPayoutDialog from "./helper/vault-key-enter-onPayout"
 import PayoutStateDialog from "@/components/payout/PayoutStateDialog"
 import type { PayoutLiveState } from "@/components/payout/use-payout-stream"
-import { fetchPayoutLogRecords } from "@/lib/payout-log-data"
+import { fetchPayoutLogRecords, type DisplayRecord } from "@/lib/payout-log-data"
 import { buildPayoutCsv, buildPayoutPdfBlob } from "@/lib/payout-export"
+import { displayRecordToReceipt } from "@/lib/receipt-image"
+import ReceiptModal from "./helper/receipt-modal"
 
 interface DailyTransaction {
   date: string
@@ -267,6 +269,10 @@ interface TxnCardProps {
   /** The Supabase payout reference for this date, if one exists — lets an
    *  in-flight badge (initializing/processing) reopen the live dialog. */
   payoutReference?: string | null
+  /** Full merged payout record for this date (see payout-log-data.ts) — only
+   *  populated once the payout has resolved; drives the "View Receipt" button. */
+  payoutRecord?: DisplayRecord | null
+  eventName: string
   onPayout: (txn: DailyTransaction) => void
   /** Reopens the live PayoutStateDialog for an in-flight payout. */
   onReopen: (reference: string) => void
@@ -280,7 +286,8 @@ interface TxnCardProps {
   canInitiate?: boolean
 }
 
-function TxnCard({ txn, payoutStatus, payoutReference, onPayout, onReopen, onAddMethod, hasMethods, isSelected, onToggleSelect, vaultReady = true, canInitiate = true }: TxnCardProps) {
+function TxnCard({ txn, payoutStatus, payoutReference, payoutRecord, eventName, onPayout, onReopen, onAddMethod, hasMethods, isSelected, onToggleSelect, vaultReady = true, canInitiate = true }: TxnCardProps) {
+  const [showReceipt, setShowReceipt] = useState(false)
   const canWithdraw = isWithdrawable(txn.updatedAt) && vaultReady
   const timeLeft = timeUntilWithdrawable(txn.updatedAt)
   const progress = unlockProgress(txn.updatedAt)
@@ -407,6 +414,26 @@ function TxnCard({ txn, payoutStatus, payoutReference, onPayout, onReopen, onAdd
         </div>
       </div>
 
+      {/* Receipt — only once this date's payout has actually gone through */}
+      {payoutStatus === "successful" && payoutRecord && (
+        <div className="flex justify-end">
+          <button
+            onClick={() => setShowReceipt(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-purple-50 text-[#6b2fa5] border border-purple-200 hover:bg-purple-100 transition-colors"
+          >
+            <ReceiptText size={13} />
+            View Receipt
+          </button>
+        </div>
+      )}
+
+      {showReceipt && payoutRecord && (
+        <ReceiptModal
+          data={displayRecordToReceipt(payoutRecord, eventName)}
+          onClose={() => setShowReceipt(false)}
+        />
+      )}
+
       {/* Countdown + progress bar — only when not submitted and still locked */}
       {!blockingStatus && !canWithdraw && txn.updatedAt && (
         <div className="space-y-2">
@@ -465,6 +492,9 @@ export default function PayoutsTab({
   // date → Supabase payout reference, so an in-flight badge can reopen the
   // live dialog. Populated from the status fetch and from fresh submissions.
   const [payoutRefs, setPayoutRefs] = useState<Record<string, string>>({})
+  // date → full merged payout record, so TxnCard can render a receipt
+  // without a second fetch — same shape/source as payout-log.tsx uses.
+  const [payoutRecords, setPayoutRecords] = useState<Record<string, DisplayRecord>>({})
 
   // Vault readiness — reported up by VaultPanel. Payouts are blocked for
   // every date on this event until every assigned Vault participant
@@ -576,35 +606,32 @@ export default function PayoutsTab({
 
   // Seeds the payoutStatuses map from Supabase payout records + any
   // still-open Vault holds (which live separately in Firestore — see
-  // lib/payout-firestore.ts). Runs silently — a failure here doesn't
-  // block the UI.
+  // lib/payout-firestore.ts). Reuses the same merged fetch payout-log.tsx
+  // uses (see payout-log-data.ts) instead of a bespoke lighter one, so
+  // TxnCard also gets the full record (bank, resolvedAt, etc.) needed for
+  // "View Receipt" at no extra request cost. Runs silently — a failure
+  // here doesn't block the UI.
   const fetchPayoutStatuses = useCallback(async () => {
     try {
-      const [statusRes, vaultRes] = await Promise.all([
-        fetch(`/api/payout?eventId=${eventId}&action=status`),
-        fetch(`/api/payout?eventId=${eventId}&action=vaultPending`),
-      ])
-      const statusData = await statusRes.json()
-      const vaultData = await vaultRes.json()
+      const merged = await fetchPayoutLogRecords(eventId)
 
       const map: Record<string, string> = {}
       const refMap: Record<string, string> = {}
+      const recordMap: Record<string, DisplayRecord> = {}
 
-      if (vaultRes.ok) {
-        const holds: Array<{ date: string }> = vaultData.payouts ?? []
-        for (const h of holds) map[h.date] = "vault_pending"
-      }
-
-      if (statusRes.ok) {
-        const records: Array<{ date: string; status: string; reference?: string }> = statusData.payouts ?? []
-        for (const r of records) {
-          map[r.date] = r.status
-          if (r.reference) refMap[r.date] = r.reference
-        }
-      }
+      // Vault holds first, then payout records override them for the same
+      // date — a released hold graduates into a payout row, which should
+      // win.
+      merged.filter((r) => r.source === "vaultHold").forEach((h) => { map[h.date] = "vault_pending" })
+      merged.filter((r) => r.source === "payout").forEach((r) => {
+        map[r.date] = r.status
+        refMap[r.date] = r.id
+        recordMap[r.date] = r
+      })
 
       setPayoutStatuses(map)
       setPayoutRefs((prev) => ({ ...prev, ...refMap }))
+      setPayoutRecords(recordMap)
     } catch {
       // Non-critical — button just stays visible until next load
     }
@@ -1122,6 +1149,8 @@ export default function PayoutsTab({
                   txn={txn}
                   payoutStatus={payoutStatuses[txn.date] ?? null}
                   payoutReference={payoutRefs[txn.date] ?? null}
+                  payoutRecord={payoutRecords[txn.date] ?? null}
+                  eventName={eventData?.eventName ?? ""}
                   hasMethods={methods.length > 0}
                   onPayout={(t) => { if (requireBVTOrRedirect()) setDialogTxn(t) }}
                   onReopen={handleReopenPayout}
@@ -1150,6 +1179,7 @@ export default function PayoutsTab({
         <PayoutLog
           eventId={eventId}
           userId={userId}
+          eventName={eventData?.eventName ?? ""}
           canManage={isOwner || collabRole === "admin"}
           onCancelled={() => {
             // A cancel or reject just happened — that payout's status moved

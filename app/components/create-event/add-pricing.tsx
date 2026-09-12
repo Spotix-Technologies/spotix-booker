@@ -1,28 +1,52 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, X, AlertCircle, Ticket, DollarSign, Tag, Check } from "lucide-react"
-
-interface TicketType {
-  policy: string
-  price: string
-  description: string
-  availableTickets: string
-}
+import { Plus, X, AlertCircle, Ticket, DollarSign, Tag, Check, CalendarClock, ChevronDown, ChevronUp } from "lucide-react"
+import { BurdenOfFeeCard, type FeeBurdenState } from "./helper/BurdenOfFeeCard"
+import { TicketDateTimePicker } from "./helper/TicketDateTimePicker"
+import type { TicketType } from "@/types/ticket"
 
 interface AddPricingProps {
   enablePricing: boolean
   setEnablePricing: (enabled: boolean) => void
   ticketPrices: TicketType[]
   setTicketPrices: (tickets: TicketType[]) => void
+  feeBurden: FeeBurdenState
+  setFeeBurden: (value: FeeBurdenState) => void
+  // "Stop all ticket sales" — moved here from Additional Settings (item 6)
+  // so it lives alongside the ticket types it governs.
+  enableStopDate: boolean
+  setEnableStopDate: (value: boolean) => void
+  stopDate: string
+  setStopDate: (value: string) => void
+  eventDate: string
+  getMaxStopDate: () => string
+  validateStopDate: () => boolean
 }
 
-export function AddPricing({ enablePricing, setEnablePricing, ticketPrices, setTicketPrices }: AddPricingProps) {
+const emptyTicket: TicketType = { policy: "", price: "", description: "", availableTickets: "" }
+
+export function AddPricing({
+  enablePricing,
+  setEnablePricing,
+  ticketPrices,
+  setTicketPrices,
+  feeBurden,
+  setFeeBurden,
+  enableStopDate,
+  setEnableStopDate,
+  stopDate,
+  setStopDate,
+  eventDate,
+  getMaxStopDate,
+  validateStopDate,
+}: AddPricingProps) {
   const [errorMessage, setErrorMessage] = useState("")
+  const [expandedSaleWindow, setExpandedSaleWindow] = useState<number | null>(null)
 
   useEffect(() => {
     if (enablePricing && ticketPrices.length === 0) {
-      setTicketPrices([{ policy: "", price: "", description: "", availableTickets: "" }])
+      setTicketPrices([{ ...emptyTicket }])
     }
   }, [enablePricing, ticketPrices.length, setTicketPrices])
 
@@ -40,7 +64,7 @@ export function AddPricing({ enablePricing, setEnablePricing, ticketPrices, setT
       setTicketPrices([])
       setErrorMessage("")
     } else {
-      setTicketPrices([{ policy: "", price: "", description: "", availableTickets: "" }])
+      setTicketPrices([{ ...emptyTicket }])
     }
   }
 
@@ -61,7 +85,7 @@ export function AddPricing({ enablePricing, setEnablePricing, ticketPrices, setT
 
   const updateTicket = (index: number, field: keyof TicketType, value: string) => {
     const newTickets = [...ticketPrices]
-    newTickets[index][field] = value
+    newTickets[index] = { ...newTickets[index], [field]: value }
     setTicketPrices(newTickets)
 
     if (field === "price" || field === "policy") {
@@ -70,7 +94,7 @@ export function AddPricing({ enablePricing, setEnablePricing, ticketPrices, setT
   }
 
   const addTicketType = () => {
-    const newTickets = [...ticketPrices, { policy: "", price: "", description: "", availableTickets: "" }]
+    const newTickets = [...ticketPrices, { ...emptyTicket }]
     setTicketPrices(newTickets)
   }
 
@@ -156,6 +180,9 @@ export function AddPricing({ enablePricing, setEnablePricing, ticketPrices, setT
             </p>
           </div>
 
+          {/* Burden of Fee — item 6 */}
+          <BurdenOfFeeCard feeBurden={feeBurden} setFeeBurden={setFeeBurden} />
+
           {/* Ticket Types */}
           <div className="space-y-4">
             {ticketPrices.map((ticket, index) => (
@@ -194,7 +221,7 @@ export function AddPricing({ enablePricing, setEnablePricing, ticketPrices, setT
                       <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input
                         type="text"
-                        placeholder="e.g., VIP, General Admission"
+                        placeholder="e.g., VIP, General Admission, At the Gate"
                         value={ticket.policy}
                         onChange={(e) => updateTicket(index, "policy", e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 border-2 border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 text-slate-900 placeholder:text-slate-400"
@@ -260,6 +287,45 @@ export function AddPricing({ enablePricing, setEnablePricing, ticketPrices, setT
                     className="w-full px-4 py-2.5 border-2 border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 text-slate-900 placeholder:text-slate-400 resize-none"
                   />
                 </div>
+
+                {/* Per-ticket sale window — item 6. Collapsed by default so a
+                    simple event doesn't have to look at it, but this is
+                    where e.g. "At the Gate" gets told to only go on sale the
+                    day of the event. */}
+                <div className="pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedSaleWindow(expandedSaleWindow === index ? null : index)}
+                    className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-[#6b2fa5] transition-colors"
+                  >
+                    <CalendarClock className="w-4 h-4" />
+                    Sale window for this ticket type
+                    {expandedSaleWindow === index ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+
+                  {expandedSaleWindow === index && (
+                    <div className="mt-4 grid md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <TicketDateTimePicker
+                        label="Starts selling"
+                        dateValue={ticket.saleStartDate || ""}
+                        timeValue={ticket.saleStartTime || ""}
+                        onChangeDate={(v) => updateTicket(index, "saleStartDate", v)}
+                        onChangeTime={(v) => updateTicket(index, "saleStartTime", v)}
+                        maxDate={eventDate || undefined}
+                        helperText="Leave blank to go on sale immediately"
+                      />
+                      <TicketDateTimePicker
+                        label="Stops selling"
+                        dateValue={ticket.saleEndDate || ""}
+                        timeValue={ticket.saleEndTime || ""}
+                        onChangeDate={(v) => updateTicket(index, "saleEndDate", v)}
+                        onChangeTime={(v) => updateTicket(index, "saleEndTime", v)}
+                        maxDate={eventDate || undefined}
+                        helperText="Leave blank to follow the event-wide stop date below"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -274,6 +340,62 @@ export function AddPricing({ enablePricing, setEnablePricing, ticketPrices, setT
             <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
             Add Another Ticket Type
           </button>
+
+          {/* Stop ALL ticket sales — moved from Additional Settings (item 6) */}
+          <div className="p-5 rounded-lg border-2 border-slate-200 hover:border-[#6b2fa5]/30 transition-colors bg-white">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex-1">
+                <label className="text-sm font-semibold text-slate-900 block mb-1">
+                  Stop Sale for ALL Ticket Types
+                </label>
+                <p className="text-xs text-slate-600">
+                  Set a single deadline that closes sales across every ticket type at once
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enableStopDate}
+                  onChange={(e) => {
+                    setEnableStopDate(e.target.checked)
+                    if (!e.target.checked) setStopDate("")
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#6b2fa5]/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#6b2fa5]"></div>
+              </label>
+            </div>
+            {enableStopDate && (
+              <div className="space-y-3">
+                <TicketDateTimePicker
+                  label="Stop date"
+                  dateValue={stopDate ? stopDate.split("T")[0] : ""}
+                  timeValue={stopDate ? stopDate.split("T")[1]?.slice(0, 5) || "" : ""}
+                  onChangeDate={(d) => setStopDate(`${d}T${stopDate.split("T")[1] || "00:00"}`)}
+                  onChangeTime={(t) => setStopDate(`${stopDate.split("T")[0] || eventDate}T${t}`)}
+                  maxDate={getMaxStopDate()}
+                  disabled={!eventDate}
+                />
+                {eventDate && (
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                    <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-blue-800">
+                      Stop date must be at least 3 days before event start date. Maximum
+                      date: {new Date(getMaxStopDate()).toLocaleDateString()}
+                    </p>
+                  </div>
+                )}
+                {stopDate && eventDate && !validateStopDate() && (
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200">
+                    <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-800">
+                      Stop date must be at least 3 days before the event start date
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Pricing Summary */}
           {ticketPrices.filter((t) => t.policy.trim()).length > 0 && (

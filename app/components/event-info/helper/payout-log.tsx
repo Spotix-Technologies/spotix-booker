@@ -35,10 +35,14 @@ import {
 import { useState, useCallback, useEffect } from "react"
 import { SkeletonTable } from "@/components/ui/skeleton"
 import { fetchPayoutLogRecords, type DisplayStatus, type DisplayRecord } from "@/lib/payout-log-data"
+import { displayRecordToReceipt } from "@/lib/receipt-image"
+import ReceiptModal from "./receipt-modal"
 
 interface PayoutLogProps {
   eventId: string
   userId: string
+  /** Name shown on the receipt image — see receipt-image.ts. */
+  eventName: string
   /** Can this viewer cancel/reject any active Vault hold on the event (not just their own)? */
   canManage?: boolean
   /** Fired after a Vault hold is successfully cancelled or rejected. */
@@ -115,7 +119,7 @@ function buildSupportLink(record: DisplayRecord): string {
   return `https://wa.me/2348123927685?text=${encodeURIComponent(message)}`
 }
 
-export default function PayoutLog({ eventId, userId, canManage = false, onCancelled }: PayoutLogProps) {
+export default function PayoutLog({ eventId, userId, eventName, canManage = false, onCancelled }: PayoutLogProps) {
   const [records, setRecords] = useState<DisplayRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -125,6 +129,7 @@ export default function PayoutLog({ eventId, userId, canManage = false, onCancel
   const [cancelErrors, setCancelErrors] = useState<Record<string, string>>({})
   const [confirmCancel, setConfirmCancel] = useState<DisplayRecord | null>(null)
   const [copiedRef, setCopiedRef] = useState<string | null>(null)
+  const [receiptRecord, setReceiptRecord] = useState<DisplayRecord | null>(null)
 
   const fetchAll = useCallback(async () => {
     try {
@@ -376,6 +381,16 @@ export default function PayoutLog({ eventId, userId, canManage = false, onCancel
                         Contact Spotix
                       </a>
                     )}
+
+                    {record.status === "successful" && (
+                      <button
+                        onClick={() => setReceiptRecord(record)}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-purple-50 text-[#6b2fa5] border border-purple-200 hover:bg-purple-100 transition-colors"
+                      >
+                        <ReceiptText size={13} />
+                        View Receipt
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -447,6 +462,13 @@ export default function PayoutLog({ eventId, userId, canManage = false, onCancel
             </div>
           </div>
         </div>
+      )}
+
+      {receiptRecord && (
+        <ReceiptModal
+          data={displayRecordToReceipt(receiptRecord, eventName)}
+          onClose={() => setReceiptRecord(null)}
+        />
       )}
     </div>
   )

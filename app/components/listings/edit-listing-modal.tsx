@@ -3,15 +3,14 @@
 import type React from "react"
 
 import { useState } from "react"
-import { db } from "@/lib/firebase"
-import { doc, updateDoc } from "firebase/firestore"
-import { uploadImagesToStorage, deleteImageFromStorage } from "@/lib/image-uploader"
+import { authFetch } from "@/lib/auth-client"
+import { uploadListingImages, deleteListingImage } from "@/lib/listing-image-uploader"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { ImageUploader } from "./image-uploader"
 import Image from "next/image"
-import { X, Save, FileText, DollarSign, Plus, AlertCircle } from "lucide-react"
+import { X, Save, FileText, DollarSign, Hash, Calendar, Percent, Plus, AlertCircle } from "lucide-react"
 
 interface EditListingModalProps {
   open: boolean
@@ -25,6 +24,12 @@ export function EditListingModal({ open, onOpenChange, listing, userId, onUpdate
   const [productName, setProductName] = useState(listing.productName)
   const [description, setDescription] = useState(listing.description)
   const [price, setPrice] = useState(listing.price.toString())
+  const [quantity, setQuantity] = useState((listing.quantity ?? 0).toString())
+  const [startDate, setStartDate] = useState(listing.startDate ? listing.startDate.slice(0, 10) : "")
+  const [endDate, setEndDate] = useState(listing.endDate ? listing.endDate.slice(0, 10) : "")
+  const [feeBurdenChoice, setFeeBurdenChoice] = useState<"buyer" | "organizer">(
+    listing.feeBurden?.coversSpotixFee && listing.feeBurden?.coversPaystackFee ? "organizer" : "buyer"
+  )
   const [newImages, setNewImages] = useState<File[]>([])
   const [existingImages, setExistingImages] = useState<string[]>(listing.images || [])
   const [loading, setLoading] = useState(false)
@@ -36,6 +41,12 @@ export function EditListingModal({ open, onOpenChange, listing, userId, onUpdate
     if (!productName.trim()) newErrors.productName = "Product name is required"
     if (!description.trim()) newErrors.description = "Description is required"
     if (!price || Number.parseFloat(price) <= 0) newErrors.price = "Valid price is required"
+    if (!quantity || Number.parseInt(quantity, 10) < 0 || !Number.isFinite(Number.parseInt(quantity, 10))) {
+      newErrors.quantity = "Valid quantity is required"
+    }
+    if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+      newErrors.endDate = "End date must be on or after the start date"
+    }
     if (existingImages.length + newImages.length === 0) newErrors.images = "At least 1 image is required"
     if (existingImages.length + newImages.length > 6) newErrors.images = "Maximum 6 images allowed"
     setErrors(newErrors)
@@ -51,17 +62,31 @@ export function EditListingModal({ open, onOpenChange, listing, userId, onUpdate
       let allImages = [...existingImages]
 
       if (newImages.length > 0) {
-        const newImageUrls = await uploadImagesToStorage(newImages, `listings/${userId}`)
+        const newImageUrls = await uploadListingImages(newImages)
         allImages = [...allImages, ...newImageUrls].slice(0, 6)
       }
 
-      const listingRef = doc(db, "listing", userId, "products", listing.id)
-      await updateDoc(listingRef, {
-        productName,
-        description,
-        price: Number.parseFloat(price),
-        images: allImages,
+      const res = await authFetch(`/api/listings/${listing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productName,
+          description,
+          price: Number.parseFloat(price),
+          images: allImages,
+          quantity: Number.parseInt(quantity, 10),
+          startDate: startDate || null,
+          endDate: endDate || null,
+          feeBurden:
+            feeBurdenChoice === "organizer"
+              ? { coversSpotixFee: true, coversPaystackFee: true }
+              : { coversSpotixFee: false, coversPaystackFee: false },
+        }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Failed to update listing")
+      }
 
       onUpdate()
       onOpenChange(false)
@@ -77,7 +102,7 @@ export function EditListingModal({ open, onOpenChange, listing, userId, onUpdate
     const imageUrl = existingImages[index]
     setDeletingImageIndex(index)
     try {
-      await deleteImageFromStorage(imageUrl)
+      await deleteListingImage(imageUrl)
       setExistingImages(existingImages.filter((_, i) => i !== index))
     } catch (error) {
       console.error("Error deleting image:", error)
@@ -305,6 +330,102 @@ export function EditListingModal({ open, onOpenChange, listing, userId, onUpdate
                 {errors.price}
               </div>
             )}
+          </div>
+
+          {/* Quantity */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#6b2fa5]/10 rounded-lg flex items-center justify-center">
+                <Hash className="w-5 h-5 text-[#6b2fa5]" />
+              </div>
+              <label className="block text-sm font-bold text-gray-900">Quantity *</label>
+            </div>
+            <Input
+              type="number"
+              step="1"
+              min="0"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="How many units are available?"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 hover:border-gray-400"
+            />
+            {errors.quantity && (
+              <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg p-3">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {errors.quantity}
+              </div>
+            )}
+          </div>
+
+          {/* Selling window */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#6b2fa5]/10 rounded-lg flex items-center justify-center">
+                <Calendar className="w-5 h-5 text-[#6b2fa5]" />
+              </div>
+              <label className="block text-sm font-bold text-gray-900">Selling Window (optional)</label>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Start date</label>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 hover:border-gray-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">End date</label>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 hover:border-gray-400"
+                />
+              </div>
+            </div>
+            {errors.endDate && (
+              <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg p-3">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {errors.endDate}
+              </div>
+            )}
+          </div>
+
+          {/* Fee burden */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#6b2fa5]/10 rounded-lg flex items-center justify-center">
+                <Percent className="w-5 h-5 text-[#6b2fa5]" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-900">Who pays the fees?</label>
+                <p className="text-xs text-gray-500">Spotix's 5% platform fee + the Paystack processing fee.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setFeeBurdenChoice("buyer")}
+                className={`text-left p-4 rounded-lg border-2 transition-all duration-200 ${
+                  feeBurdenChoice === "buyer" ? "border-[#6b2fa5] bg-[#6b2fa5]/5" : "border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                <p className="font-semibold text-sm text-gray-900">Buyer pays the fees</p>
+                <p className="text-xs text-gray-500 mt-0.5">Added on top of your price at checkout.</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFeeBurdenChoice("organizer")}
+                className={`text-left p-4 rounded-lg border-2 transition-all duration-200 ${
+                  feeBurdenChoice === "organizer" ? "border-[#6b2fa5] bg-[#6b2fa5]/5" : "border-gray-200 hover:border-gray-300"
+                }`}
+              >
+                <p className="font-semibold text-sm text-gray-900">I'll cover the fees</p>
+                <p className="text-xs text-gray-500 mt-0.5">Deducted from your payout instead.</p>
+              </button>
+            </div>
           </div>
 
           {errors.submit && (

@@ -3,10 +3,16 @@ import { verifyAccessToken } from "@/lib/auth-tokens"
 import { TRANSFER_TTL_MS, isTransferExpired, expireTransfer } from "@/lib/transfer-utils"
 
 // ─── Shared auth helper ────────────────────────────────────────────────────
+// Verifies the spotix_at cookie server-side. Never trusts an x-user-id
+// header — unlike the other routes fixed alongside this one, this route
+// had NO self-consistency check on top of it, so trusting that header
+// wasn't just an info leak: with organizerId compared directly against the
+// spoofed value, an attacker could name themselves recipient on someone
+// else's event, then accept the transfer with their own real session and
+// walk away owning it. (Next middleware never runs on /api/*, so nothing
+// strips a client-forged header before it reaches this handler — see
+// app/api/event/one/route.ts's comment for the same reasoning.)
 async function authenticate(req: Request): Promise<{ userId: string } | Response> {
-  const header = req.headers.get("x-user-id")
-  if (header) return { userId: header }
-
   try {
     const cookieHeader = req.headers.get("cookie") ?? ""
     const match = cookieHeader.match(/spotix_at=([^;]+)/)

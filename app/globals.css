@@ -8,18 +8,21 @@
    Inner elements that intentionally scroll horizontally (e.g. horizontal pill
    rows) use their own overflow-x-auto and are unaffected by this.
 
-   IMPORTANT: overflow-y is pinned to `visible` here on purpose. Per the CSS
-   Overflow spec, setting overflow-x without overflow-y makes the browser
-   auto-compute overflow-y as `auto` instead of leaving it `visible` — which
-   silently turns <body> into its own scroll container instead of the real
-   viewport. That breaks every `position: sticky` element on the page (e.g.
-   the event-info tab strip), because sticky resolves against the nearest
-   scrolling ancestor, and that ancestor quietly became <body> instead of
-   the viewport. Pinning overflow-y: visible keeps <body> out of the
-   scrolling-ancestor chain so sticky works everywhere again. */
+   IMPORTANT: this uses `clip`, not `hidden`. Per the CSS Overflow spec, if
+   overflow-x computes to anything other than visible, the browser is
+   required to force overflow-y to auto too — even if overflow-y is
+   explicitly written as `visible` right here. (An earlier version of this
+   rule tried exactly that — `overflow-x: hidden; overflow-y: visible` — and
+   it silently got overridden anyway.) That auto turns <body> into its own
+   scroll container instead of the real viewport, which breaks every
+   `position: sticky` element on the page (e.g. the event-info tab strip),
+   because sticky resolves against the nearest scrolling ancestor, and that
+   ancestor quietly became <body> instead of the viewport. `clip` was added
+   to the spec specifically to avoid this same-element axis-pairing rule —
+   it blocks horizontal overflow without forcing the other axis into `auto`,
+   so <body> never becomes a scroll container and sticky works everywhere. */
 html, body {
-  overflow-x: hidden;
-  overflow-y: visible;
+  overflow-x: clip;
   max-width: 100%;
 }
 
@@ -212,4 +215,35 @@ html, body {
   background: radial-gradient(circle, rgba(107, 47, 165, 0.5), transparent);
   border-radius: 50%;
   animation: float 6s ease-in-out infinite, pulse-particle 3s ease-in-out infinite;
+}
+
+/* ── Ticket-shaped date/time picker (create-event, item 7) ────────────── */
+/* Punches a semicircular "notch" out of the top and bottom edge of the
+   dashed divider inside TicketDateTimePicker's trigger button, so it reads
+   as a torn ticket stub rather than a plain two-column button. Pure CSS
+   (radial-gradient mask) — no extra markup or SVG needed. */
+.ticket-stub {
+  position: relative;
+}
+.ticket-stub::before,
+.ticket-stub::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  /* Matches the white card background every ticket-stub trigger sits on
+     (create-event's step cards and the pricing ticket-type cards are both
+     bg-white) — override --ticket-notch-bg on a wrapper if a future call
+     site sits on a different background. */
+  background: var(--ticket-notch-bg, #ffffff);
+  border-radius: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+.ticket-stub::before {
+  top: -9px;
+}
+.ticket-stub::after {
+  bottom: -9px;
 }

@@ -28,18 +28,26 @@ export function ProfileStats({ profileData }: ProfileStatsProps) {
 
         <div className="grid grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
           {/* Events Created */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
+          <div className="@container bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-[#6b2fa5]/10 flex items-center justify-center flex-shrink-0">
               <Calendar className="w-5 h-5 text-[#6b2fa5]" />
             </div>
             <div className="min-w-0">
               <p className="text-xs text-slate-400 font-medium mb-0.5">Events Created</p>
-              <p className="text-2xl font-bold text-[#6b2fa5]">{profileData.eventsCreated}</p>
+              {/* Fluid size (clamp via container query units) instead of a
+                  fixed text-2xl, so a growing count shrinks to fit the card
+                  rather than bleeding past its edge. */}
+              <p
+                className="font-bold text-[#6b2fa5] whitespace-nowrap text-[clamp(1.05rem,7cqw,1.5rem)]"
+                title={String(profileData.eventsCreated)}
+              >
+                {profileData.eventsCreated}
+              </p>
             </div>
           </div>
 
           {/* Total Revenue */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-3">
+          <div className="@container bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
               <TrendingUp className="w-5 h-5 text-emerald-600" />
             </div>

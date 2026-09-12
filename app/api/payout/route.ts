@@ -48,7 +48,7 @@ async function getUserDisplay(uid: string): Promise<{ name: string; email: strin
   }
 }
 
-// ─── GET ──────────────────────────────────────────────────────────────────────
+//  GET 
 // ?eventId=xxx&action=list        → list daily transaction records (Firestore)
 // ?eventId=xxx&action=status      → payout history for this event (Supabase)
 // ?eventId=xxx&action=vaultPending → Vault holds still awaiting sign-off (Firestore)
@@ -124,7 +124,7 @@ export async function GET(req: NextRequest) {
   return fail("Invalid action. Use list, status, or vaultPending.", 400)
 }
 
-// ─── POST ─────────────────────────────────────────────────────────────────────
+//  POST 
 export async function POST(req: NextRequest) {
   const gate = requirePayoutAccessKey(req)
   if (gate) return gate
@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth
   const { userId } = auth
 
-  // ── Idempotency-Key — claimed BEFORE any business logic runs. 5 rapid
+  //  Idempotency-Key — claimed BEFORE any business logic runs. 5 rapid
   // clicks from the same confirmation dialog send 5 requests carrying the
   // SAME key (minted once, when the dialog opened its submit flow); only
   // the first to atomically claim it proceeds. Every other duplicate
@@ -239,7 +239,7 @@ export async function POST(req: NextRequest) {
   const primaryMethod = methodDoc.data()!
   const methodId = methodDoc.id
 
-  // ── Duplicate guard — checks both the Supabase payouts table (anything
+  //  Duplicate guard — checks both the Supabase payouts table (anything
   // not "failed") AND any still-open Vault hold for this date.
   const alreadyActive = await hasActiveOrSuccessfulPayout({ eventId }, date)
   if (alreadyActive) return fail("A payout request for this date has already been submitted.", 409)
@@ -261,7 +261,7 @@ export async function POST(req: NextRequest) {
     console.warn("[POST /api/payout] failed to fetch eventName:", err)
   }
 
-  // ── The Vault — multi-signature hold ──────────────────────────────────────
+  //  The Vault — multi-signature hold 
   const vaultSnap = await adminDb.collection("vaults").doc(eventId).get()
   const vaultEnabled = vaultSnap.exists && vaultSnap.data()!.enabledVault === true
   const vaultParticipantRecords: any[] = vaultEnabled ? (vaultSnap.data()!.participants ?? []) : []
@@ -284,7 +284,7 @@ export async function POST(req: NextRequest) {
   const initiator = await getUserDisplay(userId)
   const roleLabel = initiatorRole === "owner" ? "Event Creator" : initiatorRole === "admin" ? "Admin" : "Team member"
 
-  // ── Vault-enabled: create a Firestore hold. NOTHING touches Paystack or
+  //  Vault-enabled: create a Firestore hold. NOTHING touches Paystack or
   // Supabase yet — "the payout" only begins once the last participant
   // signs off (see PATCH /api/payout/vault).
   if (vaultEnabled) {
@@ -330,7 +330,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── No Vault — the payout begins right now ──────────────────────────────
+  //  No Vault — the payout begins right now 
   try {
     const row = await createInitializingPayout({
       isEvent: true,
@@ -381,7 +381,7 @@ export async function PUT(req: NextRequest) {
   return fail("Method Not Allowed", 405)
 }
 
-// ── DELETE — cancel or reject a Vault hold that hasn't cleared yet ───────────
+//  DELETE — cancel or reject a Vault hold that hasn't cleared yet 
 // This is the only pre-payout state left to cancel: once a hold is
 // released (or a non-Vault payout is created), money is already in
 // flight and cannot be stopped from here.

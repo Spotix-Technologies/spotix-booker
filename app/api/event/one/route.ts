@@ -2,53 +2,6 @@
  * app/api/event/one/route.ts
  *
  * POST /api/event/one — Create a new event (authenticated bookers only)
- *
- * ── Auth discrepancy fixed ─────────────────────────────────────────────────────
- * This route previously read identity via a bespoke `resolveIdentity()` that:
- *   1. Checked `x-user-id`/`x-user-is-booker` request headers first — dead code.
- *      proxy.ts's matcher explicitly excludes `/api/*`, so those headers are
- *      never injected on API requests; only page navigations get them.
- *   2. Read the access token off `request.cookies` (NextRequest's cookie jar)
- *      instead of the `cookies()` helper from `next/headers` that every other
- *      route in this app (teams, event/list/[eventId], payout, payout/vault,
- *      payout/method, ...) uses.
- *   3. Imported `COOKIE_ACCESS_TOKEN` from `@/api/auth/route` — the ONLY
- *      cross-import of a Route Handler module anywhere in this codebase.
- *      `route.ts` files are only supposed to export HTTP method handlers and
- *      the segment config (`runtime`, `dynamic`, etc.); pulling in a stray
- *      named export drags in that whole module's dependency graph and isn't
- *      something Next.js's route module loader is built to support cleanly.
- *
- * None of that is what was actually causing "you must be logged in" for an
- * already-logged-in user, though — it's just legacy drift worth cleaning up.
- * The real cause: the auth flow was updated app-wide to hold the access token
- * in memory and attach it as an `Authorization: Bearer` header via
- * `authFetch()` (see lib/auth-client.ts), with the `spotix_at` cookie kept in
- * sync alongside it. Every other authenticated page in the app was migrated
- * to call its APIs through `authFetch()`. The one-time event creation form
- * (app/components/create-event/create-one-time-event.tsx) was missed — it
- * was still calling this endpoint with a plain `fetch()`. That meant:
- *   - No Authorization header was ever sent (this route did support Bearer,
- *     it just never received one from this particular caller).
- *   - No silent-refresh-and-retry on 401 — the auto-refresh authFetch()
- *     provides for every other call was never triggered here.
- * Filling out the multi-step create-event form easily takes longer than the
- * access token's 15-minute TTL, so the `spotix_at` cookie would go stale
- * mid-form with nothing to refresh it, and submitting would 401 even though
- * the user's session (refresh token) was still completely valid. Fixed on
- * the client by switching that call to `authFetch()`.
- *
- * Changes from previous version:
- *  - Step 6: After writing the event, atomically increments totalEvents on
- *    users/{organizerId} so the revenue/dashboard API can read it directly.
- *  - Status field now supports "active" | "inactive" | "cancelled" | "completed"
- *    (was "active" | "cancelled" | "completed"). New events still default to "active".
- *
- * ── Firestore composite indexes required ──────────────────────────────────────
- *   Collection : events  |  Fields : organizerId ASC, createdAt DESC
- *   Collection : events  |  Fields : organizerId ASC, status ASC
- *   Collection : events  |  Fields : status ASC, eventDate ASC
- *   Collection : forecasts | Fields : status ASC, eventDate ASC
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -56,6 +9,7 @@ import { cookies } from "next/headers";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { verifyAccessToken } from "@/lib/auth-tokens";
+import { slugify, withSuffix } from "@/lib/slug";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,7 +32,7 @@ interface TicketType {
   quantity?: number;
 }
 
-// ── Auth — matches the pattern used everywhere else in the app ───────────────
+//  Auth — matches the pattern used everywhere else in the app 
 // (app/api/teams/route.ts, app/api/event/list/[eventId]/route.ts,
 //  app/api/payout/route.ts, etc.) Cookie first (the common case — every page
 // load carries it), Authorization Bearer as a fallback for authFetch()'s
@@ -102,13 +56,13 @@ async function resolveIdentity(
 }
 
 export async function POST(request: NextRequest) {
-  // ── 1. Auth ──────────────────────────────────────────────────────────────────
+  //  1. Auth 
   const identity = await resolveIdentity(request);
   if (!identity) return err("Unauthorized", "You must be logged in to create events", 401);
   if (!identity.isBooker) return err("Forbidden", "Only booker accounts can create events", 403);
   const organizerId = identity.uid;
 
-  // ── 2. Parse body ────────────────────────────────────────────────────────────
+  //  2. Parse body 
   let body: Record<string, any>;
   try {
     body = await request.json();
@@ -118,17 +72,21 @@ export async function POST(request: NextRequest) {
 
   const {
     eventName, eventDescription, eventImages, eventDate, eventVenue,
-    venueCoordinates = null, eventStart, eventEnd, eventEndDate, eventType,
+    venueCoordinates = null, country = null, state = null, eventStart, eventEnd, eventEndDate, eventType,
     enablePricing, ticketPrices = [], enableStopDate = false, stopDate = null,
     enabledCollaboration = false, allowAgents = false,
     affiliateId = null, affiliateName = null,
+    eventSlug: requestedSlug = null,
+    feeBurden: requestedFeeBurden = null,
   } = body;
 
-  // ── 3. Validation ────────────────────────────────────────────────────────────
+  //  3. Validation 
   if (!eventName?.trim()) return err("Bad Request", "eventName is required", 400);
   if (!eventDescription?.trim()) return err("Bad Request", "eventDescription is required", 400);
   if (!eventDate?.trim()) return err("Bad Request", "eventDate is required", 400);
   if (!eventVenue?.trim()) return err("Bad Request", "eventVenue is required", 400);
+  if (!country?.trim()) return err("Bad Request", "country is required", 400);
+  if (!state?.trim()) return err("Bad Request", "state is required", 400);
   if (!eventStart?.trim() || !eventEnd?.trim() || !eventEndDate?.trim()) {
     return err("Bad Request", "eventStart, eventEnd, and eventEndDate are all required", 400);
   }
@@ -159,21 +117,57 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // ── 4. Build event document ──────────────────────────────────────────────────
+  //  4. Build event document 
   const [primaryImage, ...additionalImages] = eventImages as string[];
   const isFree = !enablePricing;
+
+  // Item 5 — resolve a unique eventSlug. eventId (the Firestore doc id
+  // assigned below) stays the real internal key everywhere; this is purely
+  // the public URL segment, e.g. `${NEXT_PUBLIC_SPOTIX_USER}/event/{slug}`.
+  // The client already showed a live availability check while the
+  // organizer was typing (see /api/event/slug-check), but that's a UX
+  // nicety — this is the actual source of truth, with a dedupe retry loop
+  // to close the race between two organizers landing on the same slug at
+  // the same instant.
+  const baseSlug = slugify(requestedSlug || eventName) || `event-${Date.now()}`;
+  let eventSlug = baseSlug;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const candidate = withSuffix(baseSlug, attempt);
+    const existing = await adminDb.collection("events").where("eventSlug", "==", candidate).limit(1).get();
+    if (existing.empty) {
+      eventSlug = candidate;
+      break;
+    }
+    if (attempt === 5) eventSlug = withSuffix(baseSlug, Date.now() % 100000); // last-resort uniqueness
+  }
+
+  // Item 6 — who covers which fee. Both default to false (attendee pays),
+  // matching pre-existing behavior. Consumed by spotix-user's checkout math
+  // in utils/priceUtility.ts (resolveFeeBurden/computeOrderPricing).
+  const feeBurden = {
+    coversPaystackFee: !!requestedFeeBurden?.coversPaystackFee,
+    coversSpotixFee: !!requestedFeeBurden?.coversSpotixFee,
+  };
 
   const eventDoc: Record<string, any> = {
     organizerId,
     eventName: eventName.trim(),
+    eventSlug,
     eventDescription: eventDescription.trim(),
     eventImage: primaryImage,
     eventImages: additionalImages,
     eventDate, eventEndDate, eventStart, eventEnd,
     eventVenue: eventVenue.trim(),
     venueCoordinates: venueCoordinates ?? null,
+    // Structured location alongside the free-text venue — lets buyers and
+    // the search_events MCP tool filter events per-state/country without
+    // parsing eventVenue. Sourced client-side from the free CountriesNow
+    // API (app/lib/countries.ts), not Google's Places/Geocoding APIs.
+    country: country.trim(),
+    state: state.trim(),
     eventType, isFree,
     ticketPrices: enablePricing ? ticketPrices : [],
+    feeBurden,
     enabledCollaboration,
     allowAgents: enabledCollaboration ? allowAgents : false,
     affiliateId: affiliateId ?? null,
@@ -186,7 +180,7 @@ export async function POST(request: NextRequest) {
     createdAt: FieldValue.serverTimestamp(),
   };
 
-  // ── 5. Write event to Firestore ──────────────────────────────────────────────
+  //  5. Write event to Firestore 
   const warnings: string[] = [];
   let eventId: string;
 
@@ -201,7 +195,7 @@ export async function POST(request: NextRequest) {
     return err("Event Creation Failed", message, 500, firestoreErr.message);
   }
 
-  // ── 6. Increment totalEvents on the organizer's user document ────────────────
+  //  6. Increment totalEvents on the organizer's user document 
   /**
    * users/{organizerId}.totalEvents is the authoritative counter read by the
    * revenue/dashboard API. Incrementing here keeps it in sync without requiring
@@ -220,7 +214,7 @@ export async function POST(request: NextRequest) {
     warnings.push("User event counter could not be updated — dashboard total may be temporarily stale");
   }
 
-  // ── 7. Seed forecast document ────────────────────────────────────────────────
+  //  7. Seed forecast document 
   try {
     const city = venueCoordinates
       ? eventVenue.trim().split(",").pop()?.trim() ?? eventVenue.trim()
@@ -237,7 +231,7 @@ export async function POST(request: NextRequest) {
     warnings.push("Weather forecast could not be initialised for this event");
   }
 
-  // ── 8. Affiliate relationship ────────────────────────────────────────────────
+  //  8. Affiliate relationship 
   if (affiliateId) {
     try {
       const batch = adminDb.batch();
@@ -255,7 +249,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // ── 9. Analytics ─────────────────────────────────────────────────────────────
+  //  9. Analytics 
   try {
     const watFormatter = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Africa/Lagos", year: "numeric", month: "2-digit", day: "2-digit",
@@ -283,7 +277,7 @@ export async function POST(request: NextRequest) {
     warnings.push("Analytics could not be updated");
   }
 
-  // ── 10. Success ──────────────────────────────────────────────────────────────
+  //  10. Success 
   return ok(
     {
       success: true,
@@ -292,6 +286,7 @@ export async function POST(request: NextRequest) {
       data: {
         eventName: eventDoc.eventName, eventType, isFree, eventDate,
         eventVenue: eventDoc.eventVenue,
+        country: eventDoc.country, state: eventDoc.state,
         ticketTypesCount: enablePricing ? ticketPrices.length : 0,
       },
       ...(warnings.length > 0 ? { warnings } : {}),

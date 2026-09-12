@@ -13,7 +13,7 @@
 // visibility must stay in lockstep, hence one shared file for both.
 
 export const ALL_TABS = [
-  "overview", "eventlink", "payouts", "attendees",
+  "overview", "eventlink", "payouts", "attendees", "checkin",
   "discounts", "merch", "referrals", "form", "responses",
   "weather", "transfer", "edit", "teams", "agentRequests", "apiAccess",
 ] as const
@@ -23,13 +23,20 @@ export type TabId = typeof ALL_TABS[number]
 // ── Built-in role → allowed tab IDs ───────────────────────────────────────────
 // Admin collaborators have the same event-management controls as organizers,
 // including event editing and discount management.
+//
+// "checkin" (the tab — event-day QR/manual/email check-in tooling) is
+// visible by default to the Check-in role, same as Attendees. Admin also
+// gets it by default since Admin is meant to see everything short of
+// edit/teams/payout-method-creation. It is intentionally NOT in
+// `accountant`'s default set, but an owner/Admin can still hand it to a
+// custom role via the "checkin" permission below.
 export const BUILT_IN_ROLE_TABS: Record<string, TabId[]> = {
   admin: [
-    "overview", "eventlink", "payouts", "attendees", "discounts", "merch",
+    "overview", "eventlink", "payouts", "attendees", "checkin", "discounts", "merch",
     "referrals", "form", "responses", "weather", "transfer", "edit",
     "teams", "agentRequests", "apiAccess",
   ],
-  checkin:    ["attendees", "eventlink", "weather", "form", "responses"],
+  checkin:    ["attendees", "checkin", "eventlink", "weather", "form", "responses"],
   accountant: ["overview", "eventlink", "payouts", "discounts", "merch"],
 }
 
@@ -40,6 +47,7 @@ export const BUILT_IN_ROLE_TABS: Record<string, TabId[]> = {
 export const PERMISSION_TO_TAB: Record<string, TabId> = {
   overview:  "overview",
   attendees: "attendees",
+  checkin:   "checkin",
   payouts:   "payouts",
   discounts: "discounts",
   merch:     "merch",

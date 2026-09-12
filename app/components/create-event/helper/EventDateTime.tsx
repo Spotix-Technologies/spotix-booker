@@ -1,5 +1,6 @@
 import React from "react"
 import { Calendar, AlertCircle } from "lucide-react"
+import { TicketDateTimePicker } from "./TicketDateTimePicker"
 
 interface EventDateTimeProps {
   eventDate: string
@@ -27,7 +28,7 @@ export function EventDateTime({
   validateEndDateTime,
 }: EventDateTimeProps) {
   return (
-    <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+    <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-5 sm:p-6 lg:p-8 shadow-sm">
       <div className="flex items-center gap-3 mb-6">
         <div className="flex items-center justify-center w-10 h-10 bg-[#6b2fa5]/10 rounded-lg">
           <Calendar className="w-5 h-5 text-[#6b2fa5]" />
@@ -42,37 +43,16 @@ export function EventDateTime({
             <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
             Event Start
           </h3>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Start Date <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
-                min={getMinDate()}
-                required
-                className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 text-slate-900"
-              />
-              <p className="text-xs text-slate-500 mt-1">
-                Event must be at least 2 days from today
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Start Time <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="time"
-                value={eventStart}
-                onChange={(e) => setEventStart(e.target.value)}
-                required
-                className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 text-slate-900"
-              />
-            </div>
-          </div>
+          <TicketDateTimePicker
+            label="Starts"
+            required
+            dateValue={eventDate}
+            timeValue={eventStart}
+            onChangeDate={setEventDate}
+            onChangeTime={setEventStart}
+            minDate={getMinDate()}
+            helperText="Event must be at least 2 days from today"
+          />
         </div>
 
         {/* Event End Section */}
@@ -81,46 +61,17 @@ export function EventDateTime({
             <div className="w-2 h-2 rounded-full bg-red-500"></div>
             Event End
           </h3>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                End Date <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                value={eventEndDate}
-                onChange={(e) => setEventEndDate(e.target.value)}
-                min={eventDate || getMinDate()}
-                disabled={!eventDate || !eventStart}
-                required
-                className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 text-slate-900 disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
-              />
-              {(!eventDate || !eventStart) && (
-                <p className="text-xs text-amber-600 mt-1">
-                  Set start date and time first
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                End Time <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="time"
-                value={eventEnd}
-                onChange={(e) => setEventEnd(e.target.value)}
-                disabled={!eventDate || !eventStart}
-                required
-                className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 text-slate-900 disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
-              />
-              {(!eventDate || !eventStart) && (
-                <p className="text-xs text-amber-600 mt-1">
-                  Set start date and time first
-                </p>
-              )}
-            </div>
-          </div>
+          <TicketDateTimePicker
+            label="Ends"
+            required
+            dateValue={eventEndDate}
+            timeValue={eventEnd}
+            onChangeDate={setEventEndDate}
+            onChangeTime={setEventEnd}
+            minDate={eventDate || getMinDate()}
+            disabled={!eventDate || !eventStart}
+            helperText={!eventDate || !eventStart ? "Set start date and time first" : undefined}
+          />
           {eventEndDate &&
             eventEnd &&
             eventDate &&

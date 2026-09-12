@@ -1,12 +1,16 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
 import { ParticlesBackground } from "@/components/particles-background"
 // import { Nav } from "@/components/nav"
-import { CheckCircle, Sparkles, Calendar, Eye } from "lucide-react"
+import { CheckCircle, Sparkles, Calendar, Eye, Link2, Copy, Check } from "lucide-react"
 import confetti from "canvas-confetti"
+
+// Same base as the create-event form's live link preview — set in .env:
+// NEXT_PUBLIC_SPOTIX_USER=https://spotix.com
+const SPOTIX_USER_BASE = process.env.NEXT_PUBLIC_SPOTIX_USER || ""
 
 export default function SuccessPage() {
   const router = useRouter()
@@ -16,6 +20,29 @@ export default function SuccessPage() {
   const payId = searchParams.get("payId")
   const type = searchParams.get("type")
   const eventName = searchParams.get("eventName")
+  const slug = searchParams.get("slug")
+
+  // The shareable link (item 3) — built from the slug when we have one,
+  // falling back to the eventId-based URL for events created before slugs
+  // existed so this never renders blank.
+  const eventLink = slug
+    ? `${SPOTIX_USER_BASE}/event/${slug}`
+    : eventId
+      ? `${SPOTIX_USER_BASE}/event/${eventId}`
+      : ""
+
+  const [copied, setCopied] = useState(false)
+  const handleCopyLink = async () => {
+    if (!eventLink) return
+    try {
+      await navigator.clipboard.writeText(eventLink)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard access can be blocked (permissions, non-HTTPS context);
+      // the link text is still right there on screen to select manually.
+    }
+  }
 
   useEffect(() => {
     // Initial confetti burst
@@ -113,25 +140,55 @@ export default function SuccessPage() {
 
             {/* Event Details Cards */}
             {type !== "event-group" && (
-              <div className="grid sm:grid-cols-2 gap-4 max-w-2xl mx-auto animate-slide-up">
-                <div className="rounded-xl border-2 border-purple-200 bg-white p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105">
-                  <div className="flex items-center justify-center mb-3">
-                    <div className="p-2 bg-purple-100 rounded-lg">
-                      <Calendar size={24} style={{ color: '#6b2fa5' }} />
+              <div className="space-y-4 max-w-2xl mx-auto animate-slide-up">
+                {/* Shareable event link (item 3) — the slug-based URL
+                    guests actually use, with a one-tap copy instead of just
+                    the internal eventId. */}
+                {eventLink && (
+                  <div className="rounded-xl border-2 border-purple-200 bg-white p-6 shadow-lg hover:shadow-xl transition-all">
+                    <div className="flex items-center justify-center mb-3">
+                      <div className="p-2 bg-purple-100 rounded-lg">
+                        <Link2 size={24} style={{ color: '#6b2fa5' }} />
+                      </div>
                     </div>
-                  </div>
-                  <p className="text-sm font-medium text-gray-600 mb-2">Event ID</p>
-                  <p className="text-xl font-bold text-purple-700 break-all">{eventId}</p>
-                </div>
-                
-                <div className="rounded-xl border-2 border-purple-200 bg-white p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105">
-                  <div className="flex items-center justify-center mb-3">
-                    <div className="p-2 bg-purple-100 rounded-lg">
-                      <CheckCircle size={24} style={{ color: '#6b2fa5' }} />
+                    <p className="text-sm font-medium text-gray-600 mb-2">Your Event Link</p>
+                    <div className="flex items-center gap-2 justify-center">
+                      <p className="text-base sm:text-lg font-bold text-purple-700 break-all">{eventLink}</p>
+                      <button
+                        type="button"
+                        onClick={handleCopyLink}
+                        title="Copy link"
+                        className="flex-shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg border-2 border-purple-200 text-purple-700 hover:bg-purple-50 transition-colors"
+                      >
+                        {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
+                      </button>
                     </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      {copied ? "Copied! Share it with your guests." : "Share this link with your guests"}
+                    </p>
                   </div>
-                  <p className="text-sm font-medium text-gray-600 mb-2">Payment ID</p>
-                  <p className="text-xl font-bold text-purple-700 break-all">{payId}</p>
+                )}
+
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="rounded-xl border-2 border-purple-200 bg-white p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105">
+                    <div className="flex items-center justify-center mb-3">
+                      <div className="p-2 bg-purple-100 rounded-lg">
+                        <Calendar size={24} style={{ color: '#6b2fa5' }} />
+                      </div>
+                    </div>
+                    <p className="text-sm font-medium text-gray-600 mb-2">Event ID</p>
+                    <p className="text-xl font-bold text-purple-700 break-all">{eventId}</p>
+                  </div>
+
+                  <div className="rounded-xl border-2 border-purple-200 bg-white p-6 shadow-lg hover:shadow-xl transition-all hover:scale-105">
+                    <div className="flex items-center justify-center mb-3">
+                      <div className="p-2 bg-purple-100 rounded-lg">
+                        <CheckCircle size={24} style={{ color: '#6b2fa5' }} />
+                      </div>
+                    </div>
+                    <p className="text-sm font-medium text-gray-600 mb-2">Payment ID</p>
+                    <p className="text-xl font-bold text-purple-700 break-all">{payId}</p>
+                  </div>
                 </div>
               </div>
             )}

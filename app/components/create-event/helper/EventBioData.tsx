@@ -8,7 +8,12 @@ import {
   X,
   CheckCircle,
   AlertCircle,
+  Link2,
+  Loader2,
+  Pencil,
 } from "lucide-react"
+
+export type SlugStatus = "idle" | "checking" | "available" | "taken" | "invalid"
 
 interface EventBioDataProps {
   eventName: string
@@ -17,6 +22,14 @@ interface EventBioDataProps {
   setEventDescription: (value: string) => void
   eventType: string
   setEventType: (value: string) => void
+  /** Item 5 — shareable event link. eventId stays the internal Firestore
+   *  doc id; this is purely the human-editable public-URL segment. */
+  eventSlug?: string
+  onEventSlugChange?: (value: string) => void
+  slugStatus?: SlugStatus
+  /** e.g. "https://spotix.com" — from NEXT_PUBLIC_SPOTIX_USER. Shown as the
+   *  read-only prefix in front of the editable slug segment. */
+  spotixUserBase?: string
   eventImages: File[]
   setEventImages: (files: File[]) => void
   imagePreviewUrls: string[]
@@ -53,6 +66,10 @@ export function EventBioData({
   setEventDescription,
   eventType,
   setEventType,
+  eventSlug = "",
+  onEventSlugChange,
+  slugStatus = "idle",
+  spotixUserBase = "",
   eventImages,
   setEventImages,
   imagePreviewUrls,
@@ -120,7 +137,7 @@ export function EventBioData({
   return (
     <div className="space-y-8">
       {/* Basic Information */}
-      <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+      <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-5 sm:p-6 lg:p-8 shadow-sm">
         <div className="flex items-center gap-3 mb-6">
           <div className="flex items-center justify-center w-10 h-10 bg-[#6b2fa5]/10 rounded-lg">
             <Type className="w-5 h-5 text-[#6b2fa5]" />
@@ -142,6 +159,47 @@ export function EventBioData({
               className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 text-slate-900 placeholder:text-slate-400"
             />
           </div>
+
+          {/* Shareable event link — item 5. Auto-fills from the event name
+              until the organizer edits it directly. */}
+          {onEventSlugChange && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+                <Link2 className="w-4 h-4 text-slate-400" />
+                Your sharable event link
+              </label>
+              <div className="flex items-stretch rounded-lg border-2 border-slate-200 focus-within:ring-2 focus-within:ring-[#6b2fa5] focus-within:border-[#6b2fa5] overflow-hidden bg-white">
+                <span className="hidden sm:flex items-center px-3 bg-slate-50 border-r border-slate-200 text-xs text-slate-500 whitespace-nowrap">
+                  {(spotixUserBase || "spotix.com").replace(/^https?:\/\//, "")}/event/
+                </span>
+                <div className="relative flex-1">
+                  <Pencil className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="your-event-name"
+                    value={eventSlug}
+                    onChange={(e) => onEventSlugChange(e.target.value)}
+                    className="w-full pl-9 pr-9 py-3 text-slate-900 placeholder:text-slate-400 outline-none"
+                  />
+                  {slugStatus === "checking" && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />
+                  )}
+                  {slugStatus === "available" && (
+                    <CheckCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
+                  )}
+                  {(slugStatus === "taken" || slugStatus === "invalid") && (
+                    <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-red-500" />
+                  )}
+                </div>
+              </div>
+              <p className={`text-xs mt-1.5 ${slugStatus === "taken" || slugStatus === "invalid" ? "text-red-600" : "text-slate-500"}`}>
+                {slugStatus === "taken" && "That link is already taken — try something else."}
+                {slugStatus === "invalid" && "3–60 characters, lowercase letters, numbers, and hyphens only."}
+                {(slugStatus === "idle" || slugStatus === "checking" || slugStatus === "available") &&
+                  "Edit freely — this is what attendees will see and share. Old links keep working either way."}
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">
@@ -180,7 +238,7 @@ export function EventBioData({
       </div>
 
       {/* Event Images */}
-      <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+      <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-5 sm:p-6 lg:p-8 shadow-sm">
         <div className="flex items-center gap-3 mb-6">
           <div className="flex items-center justify-center w-10 h-10 bg-[#6b2fa5]/10 rounded-lg">
             <ImageLucide className="w-5 h-5 text-[#6b2fa5]" />
@@ -194,7 +252,7 @@ export function EventBioData({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all duration-300 ${
+            className={`border-2 border-dashed rounded-xl p-6 sm:p-8 lg:p-12 text-center cursor-pointer transition-all duration-300 ${
               isDragging
                 ? "border-[#6b2fa5] bg-[#6b2fa5]/5 scale-[1.02]"
                 : "border-slate-300 hover:border-[#6b2fa5] hover:bg-slate-50"

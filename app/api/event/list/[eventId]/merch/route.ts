@@ -6,28 +6,41 @@
  *
  * POST   /api/event/list/[eventId]/merch
  *   Body { listingId, currentUserId, eventName }
- *   → Adds listing to events/{eventId}/listings + arrayUnion(eventName) on the product doc
+ *   → Adds listing to events/{eventId}/listings
  *
  * DELETE /api/event/list/[eventId]/merch
  *   Body { firestoreId, eventName }
- *   → Removes listing from events/{eventId}/listings + arrayRemove(eventName) on the product doc
+ *   → Removes listing from events/{eventId}/listings
  *
  * All handlers:
  *   - Auth via spotix_at httpOnly cookie
  *   - Ownership enforced: authenticated user must be the event organizer
- *   - Admin SDK only — no client SDK
+ *   - Admin SDK (Firestore) + service-role Supabase client — no client SDK
  *
  * Firestore structure:
  *   events/{eventId}/listings/{firestoreId}  { listingId, userId, addedAt }
- *   listing/{userId}/products/{listingId}    { productName, description, price, images, addedEvents[] }
+ *
+ * Product data itself (productName, description, price, images, quantity,
+ * status) lives in Supabase's merch_listings table — see lib/merch-db.ts
+ * and /supabase/schema-merch.sql — NOT in Firestore. The
+ * `listing/{userId}/products/{listingId}` path this route used to read/
+ * write no longer has any real data; every listing now lives in Supabase
+ * from the moment it's created (see app/api/listings/route.ts). This route
+ * only keeps the event<->listing *link* in Firestore.
+ *
+ * Note: the old Firestore-side `addedEvents` array (arrayUnion/arrayRemove
+ * on the product doc, a reverse index of "which events include this
+ * listing") is dropped rather than ported to a new Supabase column —
+ * nothing else in the codebase reads it, and events/{eventId}/listings is
+ * already the authoritative forward index.
  */
 
 import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { adminDb } from "@/lib/firebase-admin"
 import { verifyAccessToken } from "@/lib/auth-tokens"
 import { FieldValue } from "firebase-admin/firestore"
 import { resolveEventAccess, hasTab } from "@/lib/event-access"
+import { getMerchListingById } from "@/lib/merch-db"
 
 const DEV_TAG = "spotix-api-v1"
 
@@ -39,7 +52,7 @@ function fail(message: string, status: number) {
   return NextResponse.json({ success: false, error: message, developer: DEV_TAG }, { status })
 }
 
-// ─── Auth ──────────────────────────────────────────────────────────────────────
+// --- Auth ------------------------------------------------------------------
 async function authenticate(): Promise<{ userId: string } | NextResponse> {
   const cookieStore = await cookies()
   const token = cookieStore.get("spotix_at")?.value
@@ -52,8 +65,8 @@ async function authenticate(): Promise<{ userId: string } | NextResponse> {
   }
 }
 
-// ─── Access guard — Creator, Admin, or any collaborator (built-in or custom)
-// granted the "merch" tab ────────────────────────────────────────────────────
+// --- Access guard — Creator, Admin, or any collaborator (built-in or custom)
+// granted the "merch" tab -----------------------------------------------------
 async function resolveMerchAccess(
   eventId: string,
   userId: string
@@ -66,7 +79,7 @@ async function resolveMerchAccess(
   return { ref: access.eventRef }
 }
 
-// ─── GET ───────────────────────────────────────────────────────────────────────
+// --- GET ---------------------------------------------------------------------
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ eventId: string }> }
@@ -85,30 +98,25 @@ export async function GET(
   try {
     const listingsSnap = await eventRef.collection("listings").get()
 
-    // Enrich each listing doc with full product data in parallel
+    // Enrich each listing doc with full product data from Supabase, in parallel
     const listings = await Promise.all(
       listingsSnap.docs.map(async (d) => {
         const data = d.data()
-        const { listingId, userId: ownerId } = data
+        const { listingId } = data
 
         try {
-          const productSnap = await adminDb
-            .collection("listing")
-            .doc(ownerId)
-            .collection("products")
-            .doc(listingId)
-            .get()
+          const listing = await getMerchListingById(listingId)
+          if (!listing) return null
 
-          if (!productSnap.exists) return null
-
-          const p = productSnap.data()!
           return {
             firestoreId: d.id,
-            id: listingId,
-            productName: p.productName ?? "",
-            description: p.description ?? "",
-            price: p.price ?? 0,
-            images: p.images ?? [],
+            id: listing.id,
+            productName: listing.productName,
+            description: listing.description,
+            price: listing.price,
+            images: listing.images,
+            quantity: listing.quantity,
+            status: listing.status,
           }
         } catch {
           return null
@@ -123,7 +131,7 @@ export async function GET(
   }
 }
 
-// ─── POST ──────────────────────────────────────────────────────────────────────
+// --- POST ----------------------------------------------------------------------
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ eventId: string }> }
@@ -147,15 +155,14 @@ export async function POST(
   if (owned instanceof NextResponse) return owned
   const { ref: eventRef } = owned
 
-  // Verify the product exists
-  const productRef = adminDb
-    .collection("listing")
-    .doc(currentUserId)
-    .collection("products")
-    .doc(listingId)
-
-  const productSnap = await productRef.get()
-  if (!productSnap.exists) return fail("Listing not found", 404)
+  // Verify the product exists in Supabase and actually belongs to
+  // currentUserId — the old Firestore path never checked ownership here,
+  // trusting whatever the client sent; this closes that gap.
+  const listing = await getMerchListingById(listingId)
+  if (!listing) return fail("Listing not found", 404)
+  if (listing.bookerId !== currentUserId) {
+    return fail("This listing does not belong to the specified user", 403)
+  }
 
   // Check not already added
   const existing = await eventRef
@@ -173,22 +180,18 @@ export async function POST(
       addedAt: FieldValue.serverTimestamp(),
     })
 
-    // arrayUnion eventName on the product doc
-    await productRef.update({
-      addedEvents: FieldValue.arrayUnion(eventName),
-    })
-
-    const p = productSnap.data()!
     return ok(
       {
         message: "Listing added successfully",
         listing: {
           firestoreId: newDocRef.id,
-          id: listingId,
-          productName: p.productName ?? "",
-          description: p.description ?? "",
-          price: p.price ?? 0,
-          images: p.images ?? [],
+          id: listing.id,
+          productName: listing.productName,
+          description: listing.description,
+          price: listing.price,
+          images: listing.images,
+          quantity: listing.quantity,
+          status: listing.status,
         },
       },
       201
@@ -199,7 +202,7 @@ export async function POST(
   }
 }
 
-// ─── DELETE ────────────────────────────────────────────────────────────────────
+// --- DELETE ----------------------------------------------------------------------
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ eventId: string }> }
@@ -226,21 +229,8 @@ export async function DELETE(
   const listingSnap = await listingDocRef.get()
   if (!listingSnap.exists) return fail("Listing not found", 404)
 
-  const { listingId, userId: ownerId } = listingSnap.data()!
-
   try {
     await listingDocRef.delete()
-
-    // arrayRemove eventName from the product doc
-    await adminDb
-      .collection("listing")
-      .doc(ownerId)
-      .collection("products")
-      .doc(listingId)
-      .update({
-        addedEvents: FieldValue.arrayRemove(eventName),
-      })
-
     return ok({ message: "Listing removed successfully" })
   } catch (e) {
     console.error("[DELETE merch] failed", e)

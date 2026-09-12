@@ -6,26 +6,26 @@ import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
   try {
-    // Resolve user ID from middleware header or cookie fallback
-    let xUserId = request.headers.get("x-user-id")
-
-    if (!xUserId) {
-      const token = request.cookies.get("spotix_at")?.value
-      if (!token) {
-        return NextResponse.json(
-          { error: "Unauthorized", message: "Not authenticated" },
-          { status: 401 }
-        )
-      }
-      try {
-        const payload = await verifyAccessToken(token, "spotix-booker")
-        xUserId = payload.uid
-      } catch {
-        return NextResponse.json(
-          { error: "Unauthorized", message: "Invalid or expired token" },
-          { status: 401 }
-        )
-      }
+    // Auth: verify the spotix_at cookie server-side — never trust an
+    // x-user-id header (see app/api/event/one/route.ts's comment: Next
+    // middleware never runs on /api/*, so nothing strips a client-forged
+    // header before it reaches this handler).
+    const token = request.cookies.get("spotix_at")?.value
+    if (!token) {
+      return NextResponse.json(
+        { error: "Unauthorized", message: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    let xUserId: string
+    try {
+      const payload = await verifyAccessToken(token, "spotix-booker")
+      xUserId = payload.uid
+    } catch {
+      return NextResponse.json(
+        { error: "Unauthorized", message: "Invalid or expired token" },
+        { status: 401 }
+      )
     }
 
     const userId = request.nextUrl.searchParams.get("userId")

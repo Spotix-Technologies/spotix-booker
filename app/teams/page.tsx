@@ -41,6 +41,7 @@ interface LookedUpUser {
 const ALL_PERMISSIONS: { id: string; label: string }[] = [
   { id: "overview",   label: "Overview" },
   { id: "attendees",  label: "Attendees" },
+  { id: "checkin",    label: "Check-in" },
   { id: "payouts",    label: "Payouts" },
   { id: "discounts",  label: "Discounts" },
   { id: "merch",      label: "Merch" },
@@ -61,7 +62,7 @@ const BUILT_IN_ROLES = [
     color: "bg-rose-50 text-rose-700 border-rose-200",
     activeColor: "bg-rose-600 text-white border-rose-600",
     description: "Full access except creating payout methods",
-    permissions: ["overview", "attendees", "payouts", "discounts", "merch", "referrals", "form", "responses", "weather", "share", "transfer"],
+    permissions: ["overview", "attendees", "checkin", "payouts", "discounts", "merch", "referrals", "form", "responses", "weather", "share", "transfer"],
     restricted: ["Edit Event", "Create Payout Method"],
   },
   {
@@ -71,7 +72,7 @@ const BUILT_IN_ROLES = [
     color: "bg-blue-50 text-blue-700 border-blue-200",
     activeColor: "bg-blue-600 text-white border-blue-600",
     description: "Attendee check-in and event day operations",
-    permissions: ["attendees", "share", "weather", "form", "responses"],
+    permissions: ["attendees", "checkin", "share", "weather", "form", "responses"],
     restricted: ["Overview", "Payouts", "Discounts", "Merch", "Referrals", "Transfer", "Edit Event"],
   },
   {

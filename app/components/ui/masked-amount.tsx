@@ -18,8 +18,11 @@ interface MaskedAmountProps {
 const SIZE_CLASSES = {
   sm: "text-sm",
   md: "text-base",
-  lg: "text-2xl",
-  xl: "text-3xl",
+  // Fluid, container-aware sizing: scales down smoothly as the figure grows
+  // (more digits) or the card it sits in gets narrower, instead of
+  // overflowing the card's edges. Requires an ancestor with `@container`.
+  lg: "text-[clamp(1.05rem,7cqw,1.5rem)]",
+  xl: "text-[clamp(1.25rem,8cqw,1.875rem)]",
 }
 
 const ICON_SIZE = {
@@ -48,8 +51,11 @@ export function MaskedAmount({
   }
 
   return (
-    <span className="inline-flex items-center gap-1.5 select-none">
-      <span className={`${SIZE_CLASSES[size]} font-bold tabular-nums ${className}`}>
+    <span className="inline-flex items-center gap-1.5 select-none min-w-0 max-w-full">
+      <span
+        title={isVisible ? value : undefined}
+        className={`${SIZE_CLASSES[size]} font-bold tabular-nums whitespace-nowrap ${className}`}
+      >
         {isVisible ? value : "₦••••••"}
       </span>
       {showToggle && (

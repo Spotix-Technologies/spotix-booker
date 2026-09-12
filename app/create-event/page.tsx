@@ -37,26 +37,30 @@ export default function CreateEventPage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50/30 to-slate-100">
         {/* <Nav /> */}
 
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <main className="w-full px-3 sm:px-4 lg:px-6">
           {!eventType ? (
             <EventTypeSelector onSelect={setEventType} />
           ) : (
             <>
-              {/* Back Button */}
-              <div className="mb-8 animate-in fade-in slide-in-from-left duration-500">
-                <button
-                  onClick={() => guardNavigation(resetToTypeSelection)()}
-                  className="group inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold text-slate-700 hover:text-[#6b2fa5] bg-white hover:bg-[#6b2fa5]/5 border-2 border-slate-200 hover:border-[#6b2fa5]/30 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
-                >
-                  <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-                  Back to Event Type Selection
-                </button>
-              </div>
+              {/* Back Button — for the one-time flow this now renders inside
+                  CreateOneTimeEvent itself, layered over the hero image
+                  (item 2), so it's skipped here to avoid a duplicate. */}
+              {eventType !== "one-time" && (
+                <div className="mb-8 animate-in fade-in slide-in-from-left duration-500">
+                  <button
+                    onClick={() => guardNavigation(resetToTypeSelection)()}
+                    className="group inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold text-slate-700 hover:text-[#6b2fa5] bg-white hover:bg-[#6b2fa5]/5 border-2 border-slate-200 hover:border-[#6b2fa5]/30 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
+                  >
+                    <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+                    Back to Event Type Selection
+                  </button>
+                </div>
+              )}
 
               {/* One-Time Event */}
               {eventType === "one-time" && (
                 <div className="animate-in fade-in duration-700">
-                  <CreateOneTimeEvent />
+                  <CreateOneTimeEvent onBack={() => guardNavigation(resetToTypeSelection)()} />
                 </div>
               )}
 

@@ -62,7 +62,7 @@ export function Affiliates({
   }
 
   return (
-    <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+    <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-5 sm:p-6 lg:p-8 shadow-sm">
       <div className="flex items-center gap-3 mb-6">
         <div className="flex items-center justify-center w-10 h-10 bg-[#6b2fa5]/10 rounded-lg">
           <Users className="w-5 h-5 text-[#6b2fa5]" />

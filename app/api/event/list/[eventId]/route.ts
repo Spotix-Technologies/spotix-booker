@@ -9,6 +9,7 @@
  *   Body { action: "edit", ...editFields }      → Update core event fields
  *   Body { action: "toggleDiscount", code }     → Flip discount active flag
  *   Body { action: "setFeeBurden", feeBurden: { coversPaystackFee, coversSpotixFee } } → Who pays which fee going forward
+ *   Body { action: "setSlug", eventSlug }        → Create/change the event's short link
  *
  * POST   /api/event/list/[eventId]
  *   Body { action: "addDiscount", ...discount } → Add a new discount code
@@ -34,6 +35,7 @@ import { verifyAccessToken } from "@/lib/auth-tokens"
 import { FieldValue } from "firebase-admin/firestore"
 import { resolveEventAccess, isOwnerOrAdmin, EventAccessResult } from "@/lib/event-access"
 import { buildEventBundle } from "@/lib/event-bundle"
+import { slugify, isValidSlug, withSuffix, SLUG_RULES_HINT } from "@/lib/slug"
 
 const DEV_TAG = "spotix-api-v1"
 
@@ -201,6 +203,7 @@ export async function PATCH(
     const {
       eventName, eventDescription, eventDate, eventEndDate,
       eventVenue, eventStart, eventEnd, eventType,
+      country, state,
       enablePricing, ticketPrices,
       enableStopDate, stopDate,
       enableColorCode, colorCode,
@@ -225,6 +228,12 @@ export async function PATCH(
       eventStart,
       eventEnd,
       eventType,
+      // Unlike eventVenue, country/state ARE editable post-creation —
+      // both are optional here so an event created before this feature
+      // existed doesn't get wiped back to empty on its next unrelated
+      // edit; only overwritten when the organizer actually sent a value.
+      ...(typeof country === "string" && country.trim() ? { country: country.trim() } : {}),
+      ...(typeof state === "string" && state.trim() ? { state: state.trim() } : {}),
       isFree: !enablePricing,
       ticketPrices: enablePricing ? (ticketPrices ?? []) : [],
       enableStopDate: !!enableStopDate,
@@ -242,6 +251,56 @@ export async function PATCH(
     } catch (e: any) {
       console.error("[PATCH edit] Firestore update failed", e)
       return fail("Failed to update event", 500)
+    }
+  }
+
+  // ── action: setSlug ──────────────────────────────────────────────────────
+  // Lets the organizer add (or change) the human-readable short link for an
+  // event that predates the eventSlug feature, or edit one it already has.
+  // Creator-only, same as "edit" — the slug is a core identity field, not a
+  // revenue/collaboration setting. eventId stays the real internal key
+  // everywhere else (auth, payments, admin, analytics); this only changes
+  // the public `${NEXT_PUBLIC_APP_URL}/event/{slug}` link.
+  //
+  // Mirrors the slugify + uniqueness-with-retry logic used at creation time
+  // in app/api/event/one/route.ts. The client's live /api/event/slug-check
+  // is a UX nicety only — this is the actual source of truth, so a race
+  // between two organizers can never land two events on the same slug.
+  if (action === "setSlug") {
+    const owned = await resolveOwnedEvent(eventId, userId)
+    if (owned instanceof NextResponse) return owned
+    const { ref: eventRef } = owned
+
+    const { eventSlug: requestedSlug } = body
+    const baseSlug = slugify(String(requestedSlug ?? ""))
+    if (!isValidSlug(baseSlug)) {
+      return fail(`Invalid link — ${SLUG_RULES_HINT}`, 400)
+    }
+
+    let finalSlug = baseSlug
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      const candidate = withSuffix(baseSlug, attempt)
+      const existing = await adminDb
+        .collection("events")
+        .where("eventSlug", "==", candidate)
+        .limit(1)
+        .get()
+      // A slug "taken" by this very event (re-saving the same value) isn't
+      // actually a collision.
+      const takenByAnother = !existing.empty && existing.docs[0].id !== eventId
+      if (!takenByAnother) {
+        finalSlug = candidate
+        break
+      }
+      if (attempt === 5) finalSlug = withSuffix(baseSlug, Date.now() % 100000)
+    }
+
+    try {
+      await eventRef.update({ eventSlug: finalSlug, updatedAt: FieldValue.serverTimestamp() })
+      return ok({ message: "Event link created", eventSlug: finalSlug })
+    } catch (e: any) {
+      console.error("[PATCH setSlug] failed", e)
+      return fail("Failed to save event link", 500)
     }
   }
 

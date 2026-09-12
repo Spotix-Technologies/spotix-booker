@@ -12,6 +12,7 @@ import { toast } from "@/lib/toast"
 import { SkeletonStatGrid, SkeletonRows } from "@/components/ui/skeleton"
 import OverviewTab from "@/components/event-info/overview-tab"
 import AttendeesTab from "@/components/event-info/attendees-tab"
+import CheckinTab from "@/components/event-info/checkin-tab"
 import DiscountsTab from "@/components/event-info/discounts-tab"
 import PayoutsTab from "@/components/event-info/payouts-tab"
 import EditEventTab from "@/components/event-info/edit-event-tab"
@@ -38,6 +39,7 @@ import {
 interface EventData {
   id: string
   eventName: string
+  eventSlug?: string | null
   eventImage: string
   eventDate: string
   eventType: string
@@ -95,6 +97,7 @@ const ALL_TABS = SHARED_ALL_TABS
 
 const TAB_LABELS: Record<TabId, string> = {
   overview:  "Overview",   eventlink: "Share Event", attendees: "Attendees",
+  checkin:   "Check-in",
   discounts: "Discounts",  merch:     "Merch",       referrals: "Referrals",
   form:      "Form",       payouts:   "Payouts",     responses: "Responses",
   weather:   "Weather",    transfer:  "Transfer Event", edit:   "Edit Event",
@@ -610,6 +613,7 @@ function EventInfoInner({ eventId }: { eventId: string }) {
     eventlink: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>,
     payouts: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></svg>,
     attendees: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
+    checkin: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /><path d="m14 9 2 2 4-4" /></svg>,
     discounts: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5" /><path d="m15 10 5 5-5 5" /><line x1="4" x2="20" y1="9" y2="9" /><line x1="4" x2="20" y1="19" y2="19" /></svg>,
     merch: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" x2="21" y1="6" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" /></svg>,
     referrals: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8" /><line x1="4" x2="21" y1="20" y2="3" /><polyline points="21 16 21 21 16 21" /><line x1="15" x2="21" y1="15" y2="21" /></svg>,
@@ -820,12 +824,22 @@ function EventInfoInner({ eventId }: { eventId: string }) {
             )}
 
             {activeTab === "eventlink" && visibleTabs.includes("eventlink") && (
-              loadedTabs.has("eventlink") && eventData ? <EventLinkTab eventId={eventData.id} /> : <TabSkeleton />
+              loadedTabs.has("eventlink") && eventData ? (
+                <EventLinkTab eventId={eventData.id} eventSlug={eventData.eventSlug} />
+              ) : (
+                <TabSkeleton />
+              )
             )}
 
             {activeTab === "attendees" && visibleTabs.includes("attendees") && (
               loadedTabs.has("attendees")
-                ? <AttendeesTab formatFirestoreTimestamp={(ts: any) => ts} eventId={eventId} eventName={eventData.eventName} eventEndDate={eventData.eventEndDate} eventEnd={eventData.eventEnd} />
+                ? <AttendeesTab formatFirestoreTimestamp={(ts: any) => ts} eventId={eventId} eventName={eventData.eventName} eventEndDate={eventData.eventEndDate} eventEnd={eventData.eventEnd} ticketTypes={ticketPolicies} />
+                : <TabSkeleton />
+            )}
+
+            {activeTab === "checkin" && visibleTabs.includes("checkin") && (
+              loadedTabs.has("checkin") && eventData
+                ? <CheckinTab eventId={eventId} eventName={eventData.eventName} ticketsSold={eventData.ticketsSold ?? 0} />
                 : <TabSkeleton />
             )}
 

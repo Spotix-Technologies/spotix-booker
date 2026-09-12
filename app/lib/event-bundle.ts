@@ -23,6 +23,27 @@ function tsToTimeString(ts: FirebaseFirestore.Timestamp | null | undefined): str
   try { return ts.toDate().toLocaleTimeString() } catch { return "" }
 }
 
+// "YYYY-MM-DD" using the SAME local-time components the attendees route's
+// date-range filter builds its Firestore query boundaries from (`new
+// Date(\`${startDate}T00:00:00.000\`)`, no "Z" — parsed in local time, not
+// UTC). Deliberately not toISOString(), which is UTC and would shift the
+// calendar day near midnight relative to what the filter actually matched
+// against server-side. Used so the attendees tab's date-picker filter can
+// compare client-side (search mode) against the same day the server-side
+// filter used (default paginated mode).
+function tsToISODateString(ts: FirebaseFirestore.Timestamp | string | null | undefined): string {
+  if (!ts || typeof ts === "string") return ""
+  try {
+    const d = ts.toDate()
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    return `${y}-${m}-${day}`
+  } catch {
+    return ""
+  }
+}
+
 /**
  * Shared attendee-doc → API-shape mapper. Pulled out of buildEventBundle so
  * app/api/event/list/[eventId]/attendees/route.ts (paginated browse, search-all,
@@ -38,6 +59,7 @@ export function mapAttendeeDoc(d: FirebaseFirestore.QueryDocumentSnapshot) {
     ticketType: a.ticketType ?? "Standard",
     verified: a.verified ?? false,
     purchaseDate: tsToDateString(a.purchaseDate),
+    purchaseDateISO: tsToISODateString(a.purchaseDate),
     purchaseTime: a.purchaseTime ?? tsToTimeString(a.purchaseDate),
     ticketReference: a.ticketReference ?? "Unknown",
     facialEnroll: a.faceEmbedding ? "enrolled" as const : "unenrolled" as const,
@@ -161,6 +183,9 @@ export async function buildEventBundle(
   const eventData = {
     id: eventSnap.id,
     eventName: ev.eventName ?? "",
+    // null (not "") for events created before the short-link feature —
+    // lets the client tell "no slug yet" apart from an empty string.
+    eventSlug: ev.eventSlug ?? null,
     eventImage: ev.eventImage ?? "/placeholder.svg",
     eventImages: ev.eventImages ?? [],
     eventDate: eventDate.toISOString(),

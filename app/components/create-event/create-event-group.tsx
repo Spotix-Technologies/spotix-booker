@@ -416,7 +416,7 @@ export function CreateEventGroup({ onSuccess, selectedCollection }: CreateEventG
         )}
 
         {/* Basic Information */}
-        <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+        <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-5 sm:p-6 lg:p-8 shadow-sm">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex items-center justify-center w-10 h-10 bg-[#6b2fa5]/10 rounded-lg">
               <Type className="w-5 h-5 text-[#6b2fa5]" />
@@ -500,7 +500,7 @@ export function CreateEventGroup({ onSuccess, selectedCollection }: CreateEventG
         {selectedCollection && (
           <>
             {/* Location */}
-            <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+            <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-5 sm:p-6 lg:p-8 shadow-sm">
               <div className="flex items-center gap-3 mb-6">
                 <div className="flex items-center justify-center w-10 h-10 bg-[#6b2fa5]/10 rounded-lg">
                   <MapPin className="w-5 h-5 text-[#6b2fa5]" />
@@ -543,7 +543,7 @@ export function CreateEventGroup({ onSuccess, selectedCollection }: CreateEventG
             </div>
 
             {/* Date and Time */}
-            <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+            <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-5 sm:p-6 lg:p-8 shadow-sm">
               <div className="flex items-center gap-3 mb-6">
                 <div className="flex items-center justify-center w-10 h-10 bg-[#6b2fa5]/10 rounded-lg">
                   <Calendar className="w-5 h-5 text-[#6b2fa5]" />
@@ -607,7 +607,7 @@ export function CreateEventGroup({ onSuccess, selectedCollection }: CreateEventG
             </div>
 
             {/* Pricing */}
-            <div className="rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+            <div className="rounded-xl border-2 border-slate-200 bg-white p-5 sm:p-6 lg:p-8 shadow-sm">
               <AddPricing
                 enablePricing={enablePricing}
                 setEnablePricing={setEnablePricing}
@@ -620,7 +620,7 @@ export function CreateEventGroup({ onSuccess, selectedCollection }: CreateEventG
 
         {/* Images (only when creating new collection) */}
         {!selectedCollection && (
-          <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+          <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-5 sm:p-6 lg:p-8 shadow-sm">
             <div className="flex items-center gap-3 mb-6">
               <div className="flex items-center justify-center w-10 h-10 bg-[#6b2fa5]/10 rounded-lg">
                 <ImageIcon className="w-5 h-5 text-[#6b2fa5]" />
@@ -634,7 +634,7 @@ export function CreateEventGroup({ onSuccess, selectedCollection }: CreateEventG
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all duration-300 ${
+                className={`border-2 border-dashed rounded-xl p-6 sm:p-8 lg:p-12 text-center cursor-pointer transition-all duration-300 ${
                   isDragging
                     ? "border-[#6b2fa5] bg-[#6b2fa5]/5 scale-[1.02]"
                     : "border-slate-300 hover:border-[#6b2fa5] hover:bg-slate-50"

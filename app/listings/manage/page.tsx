@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { tryRefreshTokens, getAccessToken, authFetch } from "@/lib/auth-client"
 import { ListingCard } from "@/components/listings/listing-card"
+import { ListingListRow } from "@/components/listings/listing-list-row"
 import { useListings } from "@/hooks/use-listings"
 import { Package, Plus, Search, Grid3x3, List } from "lucide-react"
 
@@ -166,14 +167,23 @@ export default function ManageListingsPage() {
                   ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
                   : "flex flex-col gap-3"
               }`}>
-                {filteredListings.map((listing) => (
-                  <ListingCard
-                    key={listing.id}
-                    listing={listing}
-                    userId={userId ?? ""}
-                    onUpdate={() => userId && loadListings(userId)}
-                  />
-                ))}
+                {filteredListings.map((listing) =>
+                  viewMode === "grid" ? (
+                    <ListingCard
+                      key={listing.id}
+                      listing={listing}
+                      userId={userId ?? ""}
+                      onUpdate={() => userId && loadListings(userId)}
+                    />
+                  ) : (
+                    <ListingListRow
+                      key={listing.id}
+                      listing={listing}
+                      userId={userId ?? ""}
+                      onUpdate={() => userId && loadListings(userId)}
+                    />
+                  )
+                )}
               </div>
             )}
           </>

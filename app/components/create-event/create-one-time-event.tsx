@@ -1,15 +1,20 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { Preloader } from "@/components/preloader"
 import { AddPricing } from "./add-pricing"
-import { AlertCircle, Sparkles, CheckCircle } from "lucide-react"
+import { AlertCircle, CheckCircle, Save, FolderOpen, Loader2, ArrowLeft } from "lucide-react"
 import { uploadImage } from "@/lib/image-uploader"
 import { authFetch, getAccessToken } from "@/lib/auth-client"
 import { MapPickerModal } from "./map-picker-modal"
 import type { TicketType } from "@/types/ticket"
+import { slugify, isValidSlug } from "@/lib/slug"
+import { useEventDraft } from "@/hooks/useEventDraft"
+import type { FeeBurdenState } from "./helper/BurdenOfFeeCard"
+import type { SlugStatus } from "./helper/EventBioData"
 
 // Import helper components
 import { EventBioData } from "./helper/EventBioData"
@@ -19,11 +24,48 @@ import { AdditionalSettings } from "./helper/AdditionalSettings"
 import { Affiliates } from "./helper/Affiliates"
 import { FormNavigation } from "./helper/FormNavigation"
 
-interface CreateOneTimeEventProps {
-  onSuccess?: () => void
+// Public base URL of spotix-user, used to build the shareable event link
+// shown live as the organizer types their event name/slug (item 5). Needs
+// the NEXT_PUBLIC_ prefix since it's read in the browser, not just at
+// build/SSR time — set it in .env: NEXT_PUBLIC_SPOTIX_USER=https://spotix.com
+const SPOTIX_USER_BASE = process.env.NEXT_PUBLIC_SPOTIX_USER || ""
+
+/** Per-tab background image, bleeding from the very top of the page down
+ *  to just above the step content card (item 8). Blurred + dark overlay so
+ *  the header text stays readable on top of it while the card underneath
+ *  stays fully legible on its own white background.
+ *
+ *  Full-bleed to the actual screen edges (item 2) via the left-1/2 +
+ *  -translate-x-1/2 + w-screen trick, which escapes whatever horizontal
+ *  padding its ancestors (main, this component's own wrapper) apply —
+ *  inset-x-0 alone only reaches the edges of the nearest padded box, which
+ *  is what was giving it that boxed-in, sharp-edged look. The overlay
+ *  stays black the whole way down (just less opaque near the bottom) so
+ *  the photo never reads as washed-out/white behind the header text,
+ *  while still blending into the page background below it (item 2). */
+function CreateEventBackdrop() {
+  return (
+    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 w-screen top-0 h-[420px] -z-10 overflow-hidden">
+      <Image
+        src="/create-event-bg.jpg"
+        alt=""
+        fill
+        priority
+        className="object-cover object-center blur-[2px] scale-105"
+      />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/75 to-black/60" />
+    </div>
+  )
 }
 
-export function CreateOneTimeEvent({ onSuccess }: CreateOneTimeEventProps) {
+interface CreateOneTimeEventProps {
+  onSuccess?: () => void
+  /** Renders the "Back to Event Type Selection" control inside the hero
+   *  image instead of the caller doing it above the component (item 2). */
+  onBack?: () => void
+}
+
+export function CreateOneTimeEvent({ onSuccess, onBack }: CreateOneTimeEventProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -46,6 +88,17 @@ export function CreateOneTimeEvent({ onSuccess }: CreateOneTimeEventProps) {
   const [ticketPrices, setTicketPrices] = useState<TicketType[]>([])
   const [enableStopDate, setEnableStopDate] = useState(false)
   const [stopDate, setStopDate] = useState("")
+  const [feeBurden, setFeeBurden] = useState<FeeBurdenState>({ coversPaystackFee: false, coversSpotixFee: false })
+
+  // Shareable event link (item 5) — auto-derives from eventName until the
+  // organizer edits the slug field directly, at which point it's theirs to
+  // control. eventId (assigned by Firestore on create) stays the internal
+  // key everywhere else; this is purely the public URL segment.
+  const [eventSlug, setEventSlug] = useState("")
+  const [slugTouched, setSlugTouched] = useState(false)
+  const [slugStatus, setSlugStatus] = useState<SlugStatus>("idle")
+  const slugCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const [enabledCollaboration, setEnabledCollaboration] = useState(false)
   const [allowAgents, setAllowAgents] = useState(false)
   const [verifiedAffiliate, setVerifiedAffiliate] = useState<{
@@ -65,6 +118,8 @@ export function CreateOneTimeEvent({ onSuccess }: CreateOneTimeEventProps) {
     lng: number
   } | null>(null)
   const [showMapPicker, setShowMapPicker] = useState(false)
+  const [country, setCountry] = useState("")
+  const [state, setState] = useState("")
 
   useEffect(() => {
     return () => {
@@ -73,6 +128,144 @@ export function CreateOneTimeEvent({ onSuccess }: CreateOneTimeEventProps) {
       })
     }
   }, [])
+
+  // Auto-derive the slug from the event name until the organizer edits it
+  // themselves (item 5).
+  useEffect(() => {
+    if (!slugTouched) {
+      setEventSlug(slugify(eventName))
+    }
+  }, [eventName, slugTouched])
+
+  const handleEventSlugChange = useCallback((value: string) => {
+    setSlugTouched(true)
+    setEventSlug(slugify(value))
+  }, [])
+
+  // Debounced live availability check against /api/event/slug-check.
+  useEffect(() => {
+    if (slugCheckTimer.current) clearTimeout(slugCheckTimer.current)
+    if (!eventSlug) {
+      setSlugStatus("idle")
+      return
+    }
+    if (!isValidSlug(eventSlug)) {
+      setSlugStatus("invalid")
+      return
+    }
+    setSlugStatus("checking")
+    slugCheckTimer.current = setTimeout(async () => {
+      try {
+        const res = await authFetch(`/api/event/slug-check?slug=${encodeURIComponent(eventSlug)}`)
+        const json = await res.json()
+        setSlugStatus(json.available ? "available" : "taken")
+      } catch {
+        setSlugStatus("idle")
+      }
+    }, 500)
+    return () => {
+      if (slugCheckTimer.current) clearTimeout(slugCheckTimer.current)
+    }
+  }, [eventSlug])
+
+  // ── Redis draft (item 4) ────────────────────────────────────────────────
+  const buildDraftSnapshot = useCallback(
+    () => ({
+      eventName, eventDescription, eventDate, eventVenue, eventStart, eventEnd,
+      eventEndDate, eventType, enablePricing, ticketPrices, enableStopDate, stopDate,
+      feeBurden, enabledCollaboration, allowAgents, verifiedAffiliate, venueCoordinates,
+      country, state,
+      eventSlug, slugTouched, currentStep,
+      // File objects can't survive JSON — uploaded images have to be re-added
+      // after restoring a draft; already-uploaded URLs are kept so nothing
+      // already-uploaded is silently lost.
+      uploadedImageUrls,
+    }),
+    [
+      eventName, eventDescription, eventDate, eventVenue, eventStart, eventEnd,
+      eventEndDate, eventType, enablePricing, ticketPrices, enableStopDate, stopDate,
+      feeBurden, enabledCollaboration, allowAgents, verifiedAffiliate, venueCoordinates,
+      country, state,
+      eventSlug, slugTouched, currentStep, uploadedImageUrls,
+    ]
+  )
+
+  const applyDraftSnapshot = useCallback((data: any) => {
+    if (!data) return
+    setEventName(data.eventName || "")
+    setEventDescription(data.eventDescription || "")
+    setEventDate(data.eventDate || "")
+    setEventVenue(data.eventVenue || "")
+    setEventStart(data.eventStart || "")
+    setEventEnd(data.eventEnd || "")
+    setEventEndDate(data.eventEndDate || "")
+    setEventType(data.eventType || "Night party")
+    setEnablePricing(!!data.enablePricing)
+    setTicketPrices(Array.isArray(data.ticketPrices) ? data.ticketPrices : [])
+    setEnableStopDate(!!data.enableStopDate)
+    setStopDate(data.stopDate || "")
+    setFeeBurden(data.feeBurden || { coversPaystackFee: false, coversSpotixFee: false })
+    setEnabledCollaboration(!!data.enabledCollaboration)
+    setAllowAgents(!!data.allowAgents)
+    setVerifiedAffiliate(data.verifiedAffiliate || null)
+    setVenueCoordinates(data.venueCoordinates || null)
+    setCountry(data.country || "")
+    setState(data.state || "")
+    setSlugTouched(!!data.slugTouched)
+    setEventSlug(data.eventSlug || "")
+    setUploadedImageUrls(Array.isArray(data.uploadedImageUrls) ? data.uploadedImageUrls : [])
+    if (typeof data.currentStep === "number") setCurrentStep(data.currentStep)
+  }, [])
+
+  // "Has entries worth protecting" — drives both the Save button's enabled
+  // state and the native browser unload prompt below.
+  const hasContent =
+    !!eventName.trim() || !!eventDescription.trim() || !!eventVenue.trim() || !!eventDate || ticketPrices.length > 0
+
+  // Tracks whether the form has changed since the last successful save —
+  // resets on every save (autosave included) and every load, so the
+  // native "leave site?" prompt only fires "till they save draft", not
+  // forever once dirty. State updates from a load land asynchronously, so
+  // that path just flags "sync on the next render" instead of trying to
+  // read fresh state synchronously.
+  const lastSavedSnapshotRef = useRef<string>("")
+  const currentSnapshotJson = JSON.stringify(buildDraftSnapshot())
+  const isUnsavedSinceLastSave = hasContent && currentSnapshotJson !== lastSavedSnapshotRef.current
+  const syncOnNextRenderRef = useRef(false)
+
+  const { isSaving: isSavingDraft, isLoading: isLoadingDraft, hasDraft, saveDraft, loadDraft, clearDraft } =
+    useEventDraft({
+      getSnapshot: buildDraftSnapshot,
+      applySnapshot: applyDraftSnapshot,
+      isDirty: hasContent,
+      onSaved: () => {
+        lastSavedSnapshotRef.current = currentSnapshotJson
+      },
+    })
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!isUnsavedSinceLastSave) return
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handler)
+    return () => window.removeEventListener("beforeunload", handler)
+  }, [isUnsavedSinceLastSave])
+
+  const handleSaveDraft = () => saveDraft()
+
+  const handleLoadDraft = async () => {
+    const success = await loadDraft()
+    if (success) syncOnNextRenderRef.current = true
+  }
+
+  useEffect(() => {
+    if (syncOnNextRenderRef.current) {
+      lastSavedSnapshotRef.current = currentSnapshotJson
+      syncOnNextRenderRef.current = false
+    }
+  }, [currentSnapshotJson])
 
   // Validation: Get minimum date (current date + 2 days)
   const getMinDate = () => {
@@ -237,13 +430,13 @@ export function CreateOneTimeEvent({ onSuccess }: CreateOneTimeEventProps) {
       case 1:
         return !!eventName && !!eventDescription && !!eventType
       case 2:
-        return !!eventVenue
+        return !!eventVenue && !!country && !!state
       case 3:
         return !!eventDate && !!eventStart && !!eventEndDate && !!eventEnd && validateEndDateTime()
       case 4:
-        return !enablePricing || ticketPrices.length > 0
+        return (!enablePricing || ticketPrices.length > 0) && (!enableStopDate || !stopDate || validateStopDate())
       case 5:
-        return !enableStopDate || !stopDate || validateStopDate()
+        return true
       case 6:
         return true
       default:
@@ -282,10 +475,12 @@ export function CreateOneTimeEvent({ onSuccess }: CreateOneTimeEventProps) {
     }
 
     // Step 1 & 3 validation
-    if (!eventName || !eventDate || !eventVenue || !eventStart || !eventEndDate || !eventEnd) {
+    if (!eventName || !eventDate || !eventVenue || !country || !state || !eventStart || !eventEndDate || !eventEnd) {
       const missingFields = []
       if (!eventName) missingFields.push("event name (Step 1)")
       if (!eventVenue) missingFields.push("venue (Step 2)")
+      if (!country) missingFields.push("country (Step 2)")
+      if (!state) missingFields.push("state (Step 2)")
       if (!eventDate || !eventStart || !eventEndDate || !eventEnd) missingFields.push("date/time (Step 3)")
       
       setError(`Missing required fields: ${missingFields.join(", ")}`)
@@ -298,10 +493,11 @@ export function CreateOneTimeEvent({ onSuccess }: CreateOneTimeEventProps) {
       return
     }
 
-    // Step 5 validation - Stop Date
+    // Pricing tab validation - Stop Date (moved here from the old
+    // Additional Settings step — see item 6)
     if (enableStopDate && stopDate) {
       if (!validateStopDate()) {
-        setError("Step 5: Stop date must be at least 3 days before the event start date")
+        setError("Pricing: Stop date must be at least 3 days before the event start date")
         return
       }
     }
@@ -355,17 +551,21 @@ export function CreateOneTimeEvent({ onSuccess }: CreateOneTimeEventProps) {
       // it never reads it from the body.
       const requestBody = {
         eventName,
+        eventSlug: eventSlug || undefined,
         eventDescription,
         eventImages: uploadedUrls,
         eventDate,
         eventVenue,
         venueCoordinates: venueCoordinates || null,
+        country,
+        state,
         eventStart,
         eventEnd,
         eventEndDate,
         eventType,
         enablePricing,
         ticketPrices: enablePricing ? ticketPrices : [],
+        feeBurden,
         enableStopDate,
         stopDate: enableStopDate && stopDate ? stopDate : null,
         enabledCollaboration,
@@ -409,10 +609,19 @@ export function CreateOneTimeEvent({ onSuccess }: CreateOneTimeEventProps) {
 
       // Generate success URL with payId
       const payId = "PAY" + Math.random().toString(36).substring(2, 10).toUpperCase()
-      const successUrl = `/create-event/success?eventId=${data.eventId}&payId=${payId}&type=one-time&eventName=${encodeURIComponent(eventName)}`
+      // Pass the slug through too (item 3) — falls back to whatever the API
+      // persisted (data.slug / data.eventSlug) in case it normalized the one
+      // the organizer typed, then to the local form value.
+      const finalSlug = data.slug || data.eventSlug || eventSlug || ""
+      const successUrl = `/create-event/success?eventId=${data.eventId}&payId=${payId}&type=one-time&eventName=${encodeURIComponent(eventName)}${finalSlug ? `&slug=${encodeURIComponent(finalSlug)}` : ""}`
 
       console.log("🎉 Event created successfully, redirecting to:", successUrl)
-      
+
+      // The event is safely persisted now — clear the Redis draft so it
+      // doesn't hang around offering to "restore" an event that already
+      // exists.
+      clearDraft()
+
       // Small delay to ensure everything is processed
       await new Promise((resolve) => setTimeout(resolve, 500))
       
@@ -460,6 +669,10 @@ export function CreateOneTimeEvent({ onSuccess }: CreateOneTimeEventProps) {
             setUploadedImageUrls={setUploadedImageUrls}
             onStartUpload={startBackgroundUpload}
             onRemoveImage={removeImage}
+            eventSlug={eventSlug}
+            onEventSlugChange={handleEventSlugChange}
+            slugStatus={slugStatus}
+            spotixUserBase={SPOTIX_USER_BASE}
           />
         )
       case 2:
@@ -469,6 +682,10 @@ export function CreateOneTimeEvent({ onSuccess }: CreateOneTimeEventProps) {
             setEventVenue={setEventVenue}
             venueCoordinates={venueCoordinates}
             setVenueCoordinates={setVenueCoordinates}
+            country={country}
+            setCountry={setCountry}
+            state={state}
+            setState={setState}
             onOpenMapPicker={() => setShowMapPicker(true)}
           />
         )
@@ -489,25 +706,27 @@ export function CreateOneTimeEvent({ onSuccess }: CreateOneTimeEventProps) {
         )
       case 4:
         return (
-          <div className="rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+          <div className="rounded-xl border-2 border-slate-200 bg-white p-5 sm:p-6 lg:p-8 shadow-sm">
             <AddPricing
               enablePricing={enablePricing}
               setEnablePricing={setEnablePricing}
               ticketPrices={ticketPrices}
               setTicketPrices={setTicketPrices}
+              feeBurden={feeBurden}
+              setFeeBurden={setFeeBurden}
+              enableStopDate={enableStopDate}
+              setEnableStopDate={setEnableStopDate}
+              stopDate={stopDate}
+              setStopDate={setStopDate}
+              eventDate={eventDate}
+              getMaxStopDate={getMaxStopDate}
+              validateStopDate={validateStopDate}
             />
           </div>
         )
       case 5:
         return (
           <AdditionalSettings
-            enableStopDate={enableStopDate}
-            setEnableStopDate={setEnableStopDate}
-            stopDate={stopDate}
-            setStopDate={setStopDate}
-            eventDate={eventDate}
-            getMaxStopDate={getMaxStopDate}
-            validateStopDate={validateStopDate}
             enabledCollaboration={enabledCollaboration}
             setEnabledCollaboration={setEnabledCollaboration}
             allowAgents={allowAgents}
@@ -530,18 +749,57 @@ export function CreateOneTimeEvent({ onSuccess }: CreateOneTimeEventProps) {
     <>
       <Preloader isLoading={loading} />
 
-      <div className="max-w-5xl mx-auto space-y-8 pb-12">
+      <div className="relative w-full px-0 sm:px-4 lg:px-6 xl:px-8 py-12 space-y-8 pb-12">
+        <CreateEventBackdrop />
+
+        {/* Top toolbar — Back (item 2) on the left, Save / Load Draft on the
+            right, both floating over the hero image instead of the back
+            button living above it on a plain background. */}
+        <div className="flex justify-between items-center gap-2 px-4 sm:px-0 animate-in fade-in duration-500">
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className="group inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-white/15 hover:bg-white/25 border-2 border-white/30 hover:border-white/50 rounded-xl backdrop-blur-md transition-all duration-200 shadow-sm"
+            >
+              <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+              Back to Event Type Selection
+            </button>
+          ) : (
+            <span />
+          )}
+
+          <div className="flex items-center gap-2">
+            {hasDraft && (
+              <button
+                type="button"
+                onClick={handleLoadDraft}
+                disabled={isLoadingDraft}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/90 backdrop-blur border-2 border-slate-200 text-sm font-semibold text-slate-700 hover:border-[#6b2fa5]/40 hover:text-[#6b2fa5] disabled:opacity-60 transition-colors shadow-sm"
+              >
+                {isLoadingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderOpen className="w-4 h-4" />}
+                Load Draft
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={isSavingDraft || !hasContent}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/90 backdrop-blur border-2 border-slate-200 text-sm font-semibold text-slate-700 hover:border-[#6b2fa5]/40 hover:text-[#6b2fa5] disabled:opacity-60 disabled:hover:text-slate-700 disabled:hover:border-slate-200 transition-colors shadow-sm"
+            >
+              {isSavingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Save
+            </button>
+          </div>
+        </div>
+
         {/* Page Header */}
         <div className="text-center space-y-4 animate-in fade-in duration-700">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-[#6b2fa5] to-purple-600 rounded-2xl shadow-lg shadow-[#6b2fa5]/30 mb-4">
-            <Sparkles className="w-8 h-8 text-white" />
-          </div>
-
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-[#6b2fa5] via-[#8b3fc5] to-[#6b2fa5] bg-clip-text text-transparent">
+          <h1 className="text-5xl font-bold text-white drop-shadow-lg">
             Create One-Time Event
           </h1>
 
-          <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+          <p className="text-lg text-slate-100 max-w-2xl mx-auto drop-shadow">
             Fill in the details below to create your event. All fields marked with * are required.
           </p>
 

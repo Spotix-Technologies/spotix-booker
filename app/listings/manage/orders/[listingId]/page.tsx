@@ -2,28 +2,26 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useParams } from "next/navigation"
-import { auth, db } from "@/lib/firebase"
-import { onAuthStateChanged } from "firebase/auth"
-import { collection, query, getDocs, doc, getDoc, updateDoc } from "firebase/firestore"
+import { authFetch, getAccessToken, tryRefreshTokens } from "@/lib/auth-client"
+import { waitForAuthInit } from "@/hooks/useAuth"
 // import { Nav } from "@/components/nav"
 import { Package, ArrowLeft, DollarSign, ShoppingBag, ChevronDown } from "lucide-react"
 import Image from "next/image"
 
 interface Order {
   id: string
-  username: string
+  username: string | null
   address: string
   fullName: string
   email: string
   phoneNumber: string
   amountPaid: number
-  orderDate: any
+  orderDate: string
   qty: number
   status: "Processing" | "Shipped" | "Delivered"
 }
 
 export default function OrderManagementPage() {
-  const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [orders, setOrders] = useState<Order[]>([])
   const [listing, setListing] = useState<any>(null)
@@ -33,53 +31,54 @@ export default function OrderManagementPage() {
   const listingId = params.listingId as string
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (!currentUser) {
+    const init = async () => {
+      try {
+        await waitForAuthInit()
+
+        let token = getAccessToken()
+        if (!token) {
+          const refreshed = await tryRefreshTokens()
+          if (!refreshed) { router.push("/login"); return }
+          token = getAccessToken()
+        }
+        if (!token) { router.push("/login"); return }
+
+        await loadListingAndOrders()
+      } catch (err) {
+        console.error("Orders page auth error:", err)
         router.push("/login")
-      } else {
-        setUser(currentUser)
-        await loadListingAndOrders(currentUser.uid)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
-    })
-    return () => unsubscribe()
+    }
+    init()
   }, [router, listingId])
 
-  const loadListingAndOrders = async (userId: string) => {
+  const loadListingAndOrders = async () => {
     try {
-      // Load listing details
-      const listingRef = doc(db, "listing", userId, "products", listingId)
-      const listingSnap = await getDoc(listingRef)
-
-      if (listingSnap.exists()) {
-        setListing({ id: listingSnap.id, ...listingSnap.data() })
+      const res = await authFetch(`/api/listings/${listingId}/orders`)
+      if (!res.ok) {
+        if (res.status === 404) router.push("/listings/manage")
+        return
       }
-
-      // Load orders
-      const ordersRef = collection(db, "listing", userId, "products", listingId, "orders")
-      const ordersQuery = query(ordersRef)
-      const ordersSnap = await getDocs(ordersQuery)
-
-      const ordersData = ordersSnap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Order[]
-
-      setOrders(ordersData)
+      const data = await res.json()
+      setListing(data.listing ?? null)
+      setOrders(data.orders ?? [])
     } catch (error) {
       console.error("Error loading orders:", error)
     }
   }
 
   const updateOrderStatus = async (orderId: string, newStatus: "Processing" | "Shipped" | "Delivered") => {
-    if (!user) return
-
     setUpdatingStatus(orderId)
     try {
-      const orderRef = doc(db, "listing", user.uid, "products", listingId, "orders", orderId)
-      await updateDoc(orderRef, { status: newStatus })
+      const res = await authFetch(`/api/listings/${listingId}/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok) return
 
-      // Update local state
       setOrders(orders.map((order) => (order.id === orderId ? { ...order, status: newStatus } : order)))
     } catch (error) {
       console.error("Error updating order status:", error)
@@ -105,9 +104,9 @@ export default function OrderManagementPage() {
     return `₦${amount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 
-  const formatDate = (date: any) => {
+  const formatDate = (date: string) => {
     if (!date) return "N/A"
-    const d = date.toDate ? date.toDate() : new Date(date)
+    const d = new Date(date)
     return d.toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
@@ -129,8 +128,8 @@ export default function OrderManagementPage() {
     )
   }
 
-  const totalAmount = listing?.TotalAmount || 0
-  const totalSold = listing?.TotalSold || 0
+  const totalAmount = listing?.totalAmount || 0
+  const totalSold = listing?.totalSold || 0
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50/30 to-gray-100">
@@ -241,7 +240,7 @@ export default function OrderManagementPage() {
                       <td className="px-6 py-4">
                         <div>
                           <p className="text-sm font-medium text-gray-900">{order.fullName}</p>
-                          <p className="text-xs text-gray-600">@{order.username}</p>
+                          {order.username && <p className="text-xs text-gray-600">@{order.username}</p>}
                         </div>
                       </td>
                       <td className="px-6 py-4">

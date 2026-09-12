@@ -219,7 +219,7 @@ export default function ViewPayoutMethods({
       )}
 
       <p className="text-xs text-gray-400 text-center">
-        Only your primary method will be used for payouts.
+        Your primary method will be selected by default for payouts.
       </p>
     </div>
   )

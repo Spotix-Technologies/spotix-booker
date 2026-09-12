@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react"
-import { MapPin, MapPinned, CheckCircle, Navigation, ChevronDown, ChevronUp } from "lucide-react"
+import { MapPin, MapPinned, CheckCircle, Navigation, ChevronDown, ChevronUp, Globe2, Loader2 } from "lucide-react"
+import { fetchCountriesWithStates, type CountryStates } from "@/lib/countries"
 
 interface EventLocationProps {
   eventVenue: string
@@ -7,6 +8,10 @@ interface EventLocationProps {
   venueCoordinates: { lat: number; lng: number } | null
   setVenueCoordinates: (coords: { lat: number; lng: number } | null) => void
   onOpenMapPicker: () => void
+  country: string
+  setCountry: (value: string) => void
+  state: string
+  setState: (value: string) => void
 }
 
 function isValidLat(val: string) {
@@ -25,7 +30,43 @@ export function EventLocation({
   venueCoordinates,
   setVenueCoordinates,
   onOpenMapPicker,
+  country,
+  setCountry,
+  state,
+  setState,
 }: EventLocationProps) {
+  // ── Country / State (free CountriesNow lookup, no API key) ──────────────
+  // Stored on the event doc alongside eventVenue so buyers/AI assistants
+  // (see search_events in the MCP) can filter events per-state without
+  // having to parse the free-text venue string.
+  const [allCountries, setAllCountries] = useState<CountryStates[]>([])
+  const [countriesLoading, setCountriesLoading] = useState(true)
+  const [countriesError, setCountriesError] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchCountriesWithStates()
+      .then((data) => {
+        if (!cancelled) setAllCountries(data)
+      })
+      .catch(() => {
+        if (!cancelled) setCountriesError(true)
+      })
+      .finally(() => {
+        if (!cancelled) setCountriesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const statesForCountry = allCountries.find((c) => c.name === country)?.states ?? []
+
+  const handleCountryChange = (value: string) => {
+    setCountry(value)
+    setState("") // a state from the previous country is never valid for the new one
+  }
+
   const [showManualCoords, setShowManualCoords] = useState(false)
   const [latInput, setLatInput] = useState(venueCoordinates?.lat?.toString() ?? "")
   const [lngInput, setLngInput] = useState(venueCoordinates?.lng?.toString() ?? "")
@@ -94,12 +135,69 @@ export function EventLocation({
   const coordsRequired = hasManualAddress
 
   return (
-    <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-8 shadow-sm">
+    <div className="space-y-6 rounded-xl border-2 border-slate-200 bg-white p-5 sm:p-6 lg:p-8 shadow-sm">
       <div className="flex items-center gap-3 mb-6">
         <div className="flex items-center justify-center w-10 h-10 bg-[#6b2fa5]/10 rounded-lg">
           <MapPin className="w-5 h-5 text-[#6b2fa5]" />
         </div>
         <h2 className="text-2xl font-bold text-slate-900">Location</h2>
+      </div>
+
+      {/* ── Country / State ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
+            <Globe2 className="w-4 h-4 text-[#6b2fa5]" />
+            Country <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <select
+              value={country}
+              onChange={(e) => handleCountryChange(e.target.value)}
+              disabled={countriesLoading}
+              required
+              className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 text-slate-900 disabled:bg-slate-50 disabled:text-slate-400"
+            >
+              <option value="">{countriesLoading ? "Loading countries..." : "Select a country"}</option>
+              {allCountries.map((c) => (
+                <option key={c.iso2} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            {countriesLoading && (
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin pointer-events-none" />
+            )}
+          </div>
+          {countriesError && (
+            <p className="mt-1.5 text-xs text-amber-600">
+              Couldn't load the country list — you can still type your venue below and try again shortly.
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
+            <Globe2 className="w-4 h-4 text-[#6b2fa5]" />
+            State / Region <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={state}
+            onChange={(e) => setState(e.target.value)}
+            disabled={!country || statesForCountry.length === 0}
+            required
+            className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 text-slate-900 disabled:bg-slate-50 disabled:text-slate-400"
+          >
+            <option value="">
+              {!country ? "Select a country first" : statesForCountry.length === 0 ? "No states listed" : "Select a state"}
+            </option>
+            {statesForCountry.map((s) => (
+              <option key={s.state_code || s.name} value={s.name}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* ── Venue input + map picker ── */}
@@ -183,7 +281,7 @@ export function EventLocation({
           <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
             <p className="text-xs text-slate-500">
               Enter decimal coordinates (e.g. Lagos: <span className="font-mono">6.524379, 3.379206</span>).
-              You can get these from Google Maps by right-clicking any location.
+              You can get these from OpenStreetMap by right-clicking any location and choosing "Show address".
             </p>
 
             <div className="flex gap-3">

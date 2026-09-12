@@ -19,6 +19,9 @@ import {
   Upload,
   ImageIcon,
   HelpCircle,
+  CalendarClock,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react"
 import { db } from "@/lib/firebase"
 import { storage } from "@/lib/firebase"
@@ -26,12 +29,21 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
 import { doc, updateDoc } from "firebase/firestore"
 import Image from "next/image" // Imported Image
 import { uploadImage } from "@/lib/image-uploader" // Imported uploadImage
+import { TicketDateTimePicker } from "@/components/create-event/helper/TicketDateTimePicker"
+import { fetchCountriesWithStates, type CountryStates } from "@/lib/countries"
 
 interface TicketType {
   policy: string
   price: string
   description?: string
   availableTickets?: string
+  // Per-ticket-type sale window — mirrors create-event/add-pricing.tsx so
+  // an organizer can set e.g. an "At the Gate" type that only goes on sale
+  // the day of the event, or close out "Early Bird" ahead of time.
+  saleStartDate?: string
+  saleStartTime?: string
+  saleEndDate?: string
+  saleEndTime?: string
 }
 
 interface EditEventTabProps {
@@ -57,12 +69,57 @@ export default function EditEventTab({
 }: EditEventTabProps): ReactElement {
   const [errorMessage, setErrorMessage] = useState("")
   const [uploadProgress, setUploadProgress] = useState(0)
+  // Country/state, unlike eventVenue, IS editable here — see the PATCH
+  // "edit" action in app/api/event/list/[eventId]/route.ts.
+  const [allCountries, setAllCountries] = useState<CountryStates[]>([])
+  useEffect(() => {
+    fetchCountriesWithStates()
+      .then(setAllCountries)
+      .catch(() => {}) // non-fatal — organizer can still save without changing location
+  }, [])
+  const statesForSelectedCountry = allCountries.find((c) => c.name === editFormData.country)?.states ?? []
+  const handleCountryChange = (value: string) => {
+    setEditFormData({ ...editFormData, country: value, state: "" })
+  }
   const [isUploading, setIsUploading] = useState(false)
   const [imagePreview, setImagePreview] = useState<string>(editFormData.eventImage || "")
   const [eventImages, setEventImages] = useState<string[]>(editFormData.eventImages || [])
   const [isUploadingImages, setIsUploadingImages] = useState<boolean[]>([])
   const [imageUploadProgress, setImageUploadProgress] = useState<number[]>([])
+  const [expandedSaleWindow, setExpandedSaleWindow] = useState<number | null>(null)
   const fileInputRef = React.createRef<HTMLInputElement>() // Added fileInputRef
+
+  // Same rules as create-event/add-pricing.tsx (item — edit-tab parity),
+  // just anchored off editFormData.eventDate instead of local state. Unlike
+  // the create flow's getMinDate (today + 2 days), editing an already-live
+  // event only needs to block picking a date in the past — an organizer
+  // may legitimately need to nudge tomorrow's event by an hour.
+  const getMinDate = () => new Date().toISOString().split("T")[0]
+
+  const getMaxStopDate = () => {
+    if (!editFormData.eventDate) return ""
+    const eventStartDate = new Date(editFormData.eventDate)
+    const maxStopDate = new Date(eventStartDate)
+    maxStopDate.setDate(eventStartDate.getDate() - 3)
+    return maxStopDate.toISOString().split("T")[0]
+  }
+
+  const validateEndDateTime = () => {
+    if (!editFormData.eventDate || !editFormData.eventStart || !editFormData.eventEndDate || !editFormData.eventEnd)
+      return true
+    const startDateTime = new Date(`${editFormData.eventDate}T${editFormData.eventStart}`)
+    const endDateTime = new Date(`${editFormData.eventEndDate}T${editFormData.eventEnd}`)
+    return endDateTime > startDateTime
+  }
+
+  const validateStopDate = () => {
+    if (!editFormData.enableStopDate || !editFormData.stopDate || !editFormData.eventDate) return true
+    const eventStartDate = new Date(editFormData.eventDate)
+    const stopDateTime = new Date(editFormData.stopDate)
+    const maxStopDate = new Date(eventStartDate)
+    maxStopDate.setDate(eventStartDate.getDate() - 3)
+    return stopDateTime <= maxStopDate && stopDateTime < eventStartDate
+  }
 
   useEffect(() => {
     setImagePreview(editFormData.eventImage || "")
@@ -439,21 +496,6 @@ export default function EditEventTab({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
-                <Calendar size={16} className="text-[#6b2fa5]" />
-                Event Date
-                <div className="group relative">
-                  <HelpCircle size={16} className="text-slate-400 cursor-help" />
-                  <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block bg-slate-900 text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap z-10">
-                    To edit this, please contact support
-                  </div>
-                </div>
-              </label>
-              <div className="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 rounded-xl text-slate-600 font-medium">
-                {editFormData.eventDate}
-              </div>
-            </div>
-            <div>
-              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
                 <MapPin size={16} className="text-[#6b2fa5]" />
                 Event Venue
                 <div className="group relative">
@@ -467,51 +509,130 @@ export default function EditEventTab({
                 {editFormData.eventVenue}
               </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-            </div>
             <div>
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
-                <Calendar size={16} className="text-[#6b2fa5]" />
-                End Date
-                <div className="group relative">
-                  <HelpCircle size={16} className="text-slate-400 cursor-help" />
-                  <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block bg-slate-900 text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap z-10">
-                    To edit this, please contact support
-                  </div>
-                </div>
+                <MapPin size={16} className="text-[#6b2fa5]" />
+                Country
               </label>
-              <div className="w-full px-4 py-3 bg-slate-100 border-2 border-slate-200 rounded-xl text-slate-600 font-medium">
-                {editFormData.eventEndDate}
-              </div>
+              <select
+                name="country"
+                value={editFormData.country || ""}
+                onChange={(e) => handleCountryChange(e.target.value)}
+                className="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-xl focus:outline-none focus:border-[#6b2fa5] focus:ring-4 focus:ring-[#6b2fa5]/10 transition-all duration-200"
+              >
+                <option value="">Select a country</option>
+                {allCountries.map((c) => (
+                  <option key={c.iso2} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
             </div>
+
             <div>
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
+                <MapPin size={16} className="text-[#6b2fa5]" />
+                State / Region
+              </label>
+              <select
+                name="state"
+                value={editFormData.state || ""}
+                onChange={handleInputChange}
+                disabled={!editFormData.country || statesForSelectedCountry.length === 0}
+                className="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-xl focus:outline-none focus:border-[#6b2fa5] focus:ring-4 focus:ring-[#6b2fa5]/10 transition-all duration-200 disabled:bg-slate-50 disabled:text-slate-400"
+              >
+                <option value="">{!editFormData.country ? "Select a country first" : "Select a state"}</option>
+                {statesForSelectedCountry.map((s) => (
+                  <option key={s.state_code || s.name} value={s.name}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
+                <Tag size={16} className="text-[#6b2fa5]" />
+                Event Category
+              </label>
+              <select
+                name="eventCategory"
+                value={editFormData.eventCategory}
+                onChange={handleInputChange}
+                className="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-xl focus:outline-none focus:border-[#6b2fa5] focus:ring-4 focus:ring-[#6b2fa5]/10 transition-all duration-200"
+                required
+              >
+                <option value="">Select a category</option>
+                <option value="Music">Music</option>
+                <option value="Sports">Sports</option>
+                <option value="Arts">Arts</option>
+                <option value="Technology">Technology</option>
+                <option value="Business">Business</option>
+                <option value="Education">Education</option>
+                <option value="Other">Other</option>
+              </select>
             </div>
           </div>
+        </div>
+      </div>
 
-          <div>
-            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
-              <Tag size={16} className="text-[#6b2fa5]" />
-              Event Category
-            </label>
-            <select
-              name="eventCategory"
-              value={editFormData.eventCategory}
-              onChange={handleInputChange}
-              className="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-xl focus:outline-none focus:border-[#6b2fa5] focus:ring-4 focus:ring-[#6b2fa5]/10 transition-all duration-200"
+      {/* Event Schedule — the read-only "contact support" date/end-date
+          fields are now the same ticket-stub picker the create flow uses,
+          so organizers can actually reschedule without a support ticket. */}
+      <div className="bg-white rounded-xl border-2 border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2.5 bg-gradient-to-br from-[#6b2fa5] to-[#8b4fc5] rounded-lg">
+            <Calendar size={20} className="text-white" />
+          </div>
+          <h3 className="text-xl font-bold text-slate-900">Event Schedule</h3>
+        </div>
+
+        <div className="space-y-6">
+          {/* Event Start */}
+          <div className="p-5 rounded-lg border-2 border-slate-200 bg-slate-50/50">
+            <h4 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+              Event Start
+            </h4>
+            <TicketDateTimePicker
+              label="Starts"
               required
-            >
-              <option value="">Select a category</option>
-              <option value="Music">Music</option>
-              <option value="Sports">Sports</option>
-              <option value="Arts">Arts</option>
-              <option value="Technology">Technology</option>
-              <option value="Business">Business</option>
-              <option value="Education">Education</option>
-              <option value="Other">Other</option>
-            </select>
+              dateValue={editFormData.eventDate || ""}
+              timeValue={editFormData.eventStart || ""}
+              onChangeDate={(v) => setEditFormData({ ...editFormData, eventDate: v })}
+              onChangeTime={(v) => setEditFormData({ ...editFormData, eventStart: v })}
+              minDate={getMinDate()}
+            />
+          </div>
+
+          {/* Event End */}
+          <div className="p-5 rounded-lg border-2 border-slate-200 bg-slate-50/50">
+            <h4 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-red-500"></div>
+              Event End
+            </h4>
+            <TicketDateTimePicker
+              label="Ends"
+              required
+              dateValue={editFormData.eventEndDate || ""}
+              timeValue={editFormData.eventEnd || ""}
+              onChangeDate={(v) => setEditFormData({ ...editFormData, eventEndDate: v })}
+              onChangeTime={(v) => setEditFormData({ ...editFormData, eventEnd: v })}
+              minDate={editFormData.eventDate || getMinDate()}
+              disabled={!editFormData.eventDate || !editFormData.eventStart}
+              helperText={!editFormData.eventDate || !editFormData.eventStart ? "Set start date and time first" : undefined}
+            />
+            {editFormData.eventEndDate &&
+              editFormData.eventEnd &&
+              editFormData.eventDate &&
+              editFormData.eventStart &&
+              !validateEndDateTime() && (
+                <div className="mt-3 flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200">
+                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-800">End date and time must be after start date and time</p>
+                </div>
+              )}
           </div>
         </div>
       </div>
@@ -711,6 +832,44 @@ export default function EditEventTab({
                     className="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-xl focus:outline-none focus:border-[#6b2fa5] focus:ring-4 focus:ring-[#6b2fa5]/10 transition-all duration-200 resize-none"
                   />
                 </div>
+
+                {/* Per-ticket sale window — same control as
+                    create-event/add-pricing.tsx, so an "At the Gate" type
+                    can be set to only open the day of the event, etc. */}
+                <div className="pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedSaleWindow(expandedSaleWindow === index ? null : index)}
+                    className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-[#6b2fa5] transition-colors"
+                  >
+                    <CalendarClock className="w-4 h-4" />
+                    Sale window for this ticket type
+                    {expandedSaleWindow === index ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+
+                  {expandedSaleWindow === index && (
+                    <div className="mt-4 grid md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <TicketDateTimePicker
+                        label="Starts selling"
+                        dateValue={ticket.saleStartDate || ""}
+                        timeValue={ticket.saleStartTime || ""}
+                        onChangeDate={(v) => handleTicketPriceChange(index, "saleStartDate", v)}
+                        onChangeTime={(v) => handleTicketPriceChange(index, "saleStartTime", v)}
+                        maxDate={editFormData.eventDate || undefined}
+                        helperText="Leave blank to go on sale immediately"
+                      />
+                      <TicketDateTimePicker
+                        label="Stops selling"
+                        dateValue={ticket.saleEndDate || ""}
+                        timeValue={ticket.saleEndTime || ""}
+                        onChangeDate={(v) => handleTicketPriceChange(index, "saleEndDate", v)}
+                        onChangeTime={(v) => handleTicketPriceChange(index, "saleEndTime", v)}
+                        maxDate={editFormData.eventDate || undefined}
+                        helperText="Leave blank to follow the event-wide stop date below"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
 
@@ -723,6 +882,76 @@ export default function EditEventTab({
               <Plus size={20} />
               Add Another Ticket Type
             </button>
+
+            {/* Stop ALL ticket sales — same control as
+                create-event/add-pricing.tsx's event-wide deadline. */}
+            <div className="p-5 rounded-lg border-2 border-slate-200 hover:border-[#6b2fa5]/30 transition-colors bg-white">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex-1">
+                  <label className="text-sm font-semibold text-slate-900 block mb-1">
+                    Stop Sale for ALL Ticket Types
+                  </label>
+                  <p className="text-xs text-slate-600">
+                    Set a single deadline that closes sales across every ticket type at once
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!editFormData.enableStopDate}
+                    onChange={(e) => {
+                      setEditFormData({
+                        ...editFormData,
+                        enableStopDate: e.target.checked,
+                        stopDate: e.target.checked ? editFormData.stopDate : "",
+                      })
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#6b2fa5]/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#6b2fa5]"></div>
+                </label>
+              </div>
+              {editFormData.enableStopDate && (
+                <div className="space-y-3">
+                  <TicketDateTimePicker
+                    label="Stop date"
+                    dateValue={editFormData.stopDate ? editFormData.stopDate.split("T")[0] : ""}
+                    timeValue={editFormData.stopDate ? editFormData.stopDate.split("T")[1]?.slice(0, 5) || "" : ""}
+                    onChangeDate={(d) =>
+                      setEditFormData({
+                        ...editFormData,
+                        stopDate: `${d}T${editFormData.stopDate?.split("T")[1] || "00:00"}`,
+                      })
+                    }
+                    onChangeTime={(t) =>
+                      setEditFormData({
+                        ...editFormData,
+                        stopDate: `${editFormData.stopDate?.split("T")[0] || editFormData.eventDate}T${t}`,
+                      })
+                    }
+                    maxDate={getMaxStopDate()}
+                    disabled={!editFormData.eventDate}
+                  />
+                  {editFormData.eventDate && (
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                      <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-blue-800">
+                        Stop date must be at least 3 days before event start date. Maximum date:{" "}
+                        {new Date(getMaxStopDate()).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
+                  {editFormData.stopDate && editFormData.eventDate && !validateStopDate() && (
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200">
+                      <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-red-800">
+                        Stop date must be at least 3 days before the event start date
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

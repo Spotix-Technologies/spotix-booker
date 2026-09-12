@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import Image from "next/image"
-import { db } from "@/lib/firebase"
-import { collection, getDocs } from "firebase/firestore"
+import { authFetch } from "@/lib/auth-client"
 import { Trash2, Plus, Search, X, AlertCircle } from "lucide-react"
 import { SkeletonCardGrid } from "@/components/ui/skeleton"
 
@@ -48,16 +47,28 @@ export default function MerchTab({ eventId, eventName, currentUserId }: MerchTab
       .trim()
   }
 
-  // ── Fetch user's own listings (client SDK — listing store, not event-specific) ──
+  // ── Fetch user's own listings — Supabase-backed, scoped to the caller's
+  // own Firebase UID via the spotix_at cookie (see lib/merch-auth.ts). Only
+  // "active" listings with stock left are offered here — an inactive or
+  // sold-out listing can't be usefully attached to an event anyway. ──────────
   useEffect(() => {
     if (!currentUserId) return
     const fetchUserListings = async () => {
       try {
-        const snapshot = await getDocs(
-          collection(db, "listing", currentUserId, "products")
-        )
+        const res = await authFetch("/api/listings")
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || "Failed to fetch your listings")
+        const listings: any[] = data.listings ?? []
         setUserListings(
-          snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Listing))
+          listings
+            .filter((l) => (l.status ?? "active") === "active" && (l.quantity ?? 0) > 0)
+            .map((l) => ({
+              id: l.id,
+              productName: l.productName,
+              description: l.description,
+              price: l.price,
+              images: l.images ?? [],
+            }))
         )
       } catch (e) {
         console.error("Error fetching user listings:", e)

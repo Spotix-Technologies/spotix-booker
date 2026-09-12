@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { X, FileJson, FileText, Download, Key, Loader2, CheckCircle, AlertCircle, Copy, Eye, EyeOff } from "lucide-react"
+import { authFetch } from "@/lib/auth-client"
+import Que from "./ques"
 
 interface RegistryDialogProps {
   open: boolean
@@ -28,6 +30,22 @@ export default function RegistryDialog({
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [keyVisible, setKeyVisible] = useState(false)
+
+  // Does this event already have an online (Supabase) check-in registry?
+  // Only matters for the JSON path — that's the one that also sets up
+  // OFFLINE scanning via a sync key, so a booker who already has an online
+  // registry running is likely about to double up on check-in setups.
+  const [hasOnlineRegistry, setHasOnlineRegistry] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    authFetch(`/api/event/list/${eventId}/checkin?action=status`)
+      .then((res) => res.json())
+      .then((data) => { if (!cancelled && data?.success) setHasOnlineRegistry(Boolean(data.hasRegistry)) })
+      .catch(() => { /* non-critical — just skip the que */ })
+    return () => { cancelled = true }
+  }, [open, eventId])
 
   if (!open) return null
 
@@ -188,6 +206,17 @@ export default function RegistryDialog({
                   <p className="text-xs text-amber-800 leading-relaxed">
                     We will generate a <strong>secret sync key</strong> that you will use to sync check-ins back to Spotix Booker after the event.
                   </p>
+                </div>
+              )}
+
+              {/* Que: already has an online registry — offer a nudge before
+                  they also set up offline scanning */}
+              {selectedFormat === "json" && hasOnlineRegistry && (
+                <div className="mt-3">
+                  <Que
+                    tone="warning"
+                    message="Looks like you have a digital registry for scanning online. You sure you wanna also scan offline?"
+                  />
                 </div>
               )}
 

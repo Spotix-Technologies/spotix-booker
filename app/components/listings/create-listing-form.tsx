@@ -4,14 +4,14 @@ import type React from "react"
 
 import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { getApp } from "firebase/app"
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore"
+import { authFetch } from "@/lib/auth-client"
+import { uploadListingImages } from "@/lib/listing-image-uploader"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
-import { FileText, DollarSign, CheckCircle2, ChevronLeft, ChevronRight, X, Upload, ImagePlus } from "lucide-react"
+import { FileText, DollarSign, Hash, Calendar, Percent, CheckCircle2, ChevronLeft, ChevronRight, X, Upload, ImagePlus } from "lucide-react"
 import Image from "next/image"
+import Link from "next/link"
 
 interface CreateListingFormProps {
   userId: string
@@ -23,6 +23,10 @@ export function CreateListingForm({ userId }: CreateListingFormProps) {
   const [productName, setProductName] = useState("")
   const [description, setDescription] = useState("")
   const [price, setPrice] = useState("")
+  const [quantity, setQuantity] = useState("")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [feeBurdenChoice, setFeeBurdenChoice] = useState<"buyer" | "organizer">("buyer")
   const [loading, setLoading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadStatus, setUploadStatus] = useState("")
@@ -31,39 +35,20 @@ export function CreateListingForm({ userId }: CreateListingFormProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
-  const uploadImagesToFirebase = async (files: File[]): Promise<string[]> => {
-    console.log("🔥 Starting image upload to Firebase Storage...")
+  const uploadImages = async (files: File[]): Promise<string[]> => {
+    console.log("📦 Starting image upload to Supabase Storage...")
     console.log(`📸 Total images to upload: ${files.length}`)
 
-    const app = getApp()
-    const storage = getStorage(app)
-    const uploadedUrls: string[] = []
+    setUploadStatus(`Uploading image 1 of ${files.length}...`)
+    setUploadProgress(0)
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}_${file.name}`
-      const storagePath = `listings/${userId}/${fileName}`
-
-      console.log(`📤 Uploading image ${i + 1}/${files.length}: ${file.name}`)
-      console.log(`📁 Storage path: ${storagePath}`)
-
-      setUploadStatus(`Uploading image ${i + 1} of ${files.length}...`)
-      setUploadProgress(Math.round(((i + 1) / files.length) * 100))
-
-      try {
-        const storageRef = ref(storage, storagePath)
-        const snapshot = await uploadBytes(storageRef, file)
-        console.log(`✅ Upload successful for ${file.name}`)
-
-        const downloadURL = await getDownloadURL(snapshot.ref)
-        console.log(`🔗 Download URL obtained: ${downloadURL.substring(0, 50)}...`)
-
-        uploadedUrls.push(downloadURL)
-      } catch (error) {
-        console.error(`❌ Error uploading ${file.name}:`, error)
-        throw error
-      }
-    }
+    const uploadedUrls = await uploadListingImages(files, (uploaded, total) => {
+      console.log(`✅ Uploaded ${uploaded}/${total}`)
+      setUploadProgress(Math.round((uploaded / total) * 100))
+      setUploadStatus(
+        uploaded < total ? `Uploading image ${uploaded + 1} of ${total}...` : "Finishing up..."
+      )
+    })
 
     console.log(`✅ All ${files.length} images uploaded successfully`)
     return uploadedUrls
@@ -163,6 +148,14 @@ export function CreateListingForm({ userId }: CreateListingFormProps) {
       newErrors.price = "Valid price is required"
       console.log("❌ Valid price is missing")
     }
+    if (!quantity || Number.parseInt(quantity, 10) < 0 || !Number.isFinite(Number.parseInt(quantity, 10))) {
+      newErrors.quantity = "Valid quantity is required"
+      console.log("❌ Valid quantity is missing")
+    }
+    if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+      newErrors.endDate = "End date must be on or after the start date"
+      console.log("❌ End date is before start date")
+    }
     if (images.length === 0) {
       newErrors.images = "At least 1 image is required"
       console.log("❌ No images provided")
@@ -194,30 +187,34 @@ export function CreateListingForm({ userId }: CreateListingFormProps) {
 
     try {
       console.log("📤 Starting image upload process...")
-      const imageUrls = await uploadImagesToFirebase(images)
+      const imageUrls = await uploadImages(images)
       console.log(`✅ All images uploaded, received ${imageUrls.length} URLs`)
 
       setUploadStatus("Saving product details...")
       setUploadProgress(100)
 
-      const app = getApp()
-      const db = getFirestore(app)
-      const listingRef = collection(db, "listing", userId, "products")
+      const res = await authFetch("/api/listings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productName,
+          description,
+          price: Number.parseFloat(price),
+          images: imageUrls,
+          quantity: Number.parseInt(quantity, 10),
+          startDate: startDate || null,
+          endDate: endDate || null,
+          feeBurden:
+            feeBurdenChoice === "organizer"
+              ? { coversSpotixFee: true, coversPaystackFee: true }
+              : { coversSpotixFee: false, coversPaystackFee: false },
+        }),
+      })
 
-      const productData = {
-        productName,
-        description,
-        price: Number.parseFloat(price),
-        images: imageUrls,
-        createdAt: serverTimestamp(),
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Failed to create listing")
       }
-
-      // console.log("💾 Saving to Firestore...")
-      // console.log("📍 Collection path:", `listing/${userId}/products`)
-      // console.log("📦 Product data:", productData)
-
-      const docRef = await addDoc(listingRef, productData)
-      // console.log(`✅ Document created with ID: ${docRef.id}`)
 
       // console.log("🧹 Cleaning up preview URLs...")
       imagePreviews.forEach((preview) => URL.revokeObjectURL(preview))
@@ -242,21 +239,11 @@ export function CreateListingForm({ userId }: CreateListingFormProps) {
   return (
     <div className="max-w-3xl mx-auto">
       <div className="text-center mb-8 animate-in fade-in slide-in-from-top-4 duration-700">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-[#6b2fa5] to-[#8b3fc5] rounded-2xl shadow-lg shadow-[#6b2fa5]/30 mb-4">
-          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
-        </div>
         <h2 className="text-3xl font-bold text-gray-900 mb-2">Create New Listing</h2>
         <p className="text-gray-600">Add your product details and upload images to get started</p>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 space-y-8 animate-in fade-in zoom-in-95 duration-700">
+      <div className="space-y-8 animate-in fade-in zoom-in-95 duration-700">
         <div className="space-y-4">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 bg-[#6b2fa5]/10 rounded-lg flex items-center justify-center">
@@ -384,8 +371,8 @@ export function CreateListingForm({ userId }: CreateListingFormProps) {
 
         <div className="space-y-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-              <FileText className="w-5 h-5 text-blue-600" />
+            <div className="w-10 h-10 bg-[#6b2fa5]/10 rounded-lg flex items-center justify-center">
+              <FileText className="w-5 h-5 text-[#6b2fa5]" />
             </div>
             <label className="block text-sm font-bold text-gray-900">Product Name *</label>
           </div>
@@ -412,8 +399,8 @@ export function CreateListingForm({ userId }: CreateListingFormProps) {
 
         <div className="space-y-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-10 h-10 bg-[#6b2fa5]/10 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-[#6b2fa5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
               </svg>
             </div>
@@ -470,6 +457,128 @@ export function CreateListingForm({ userId }: CreateListingFormProps) {
               {errors.price}
             </div>
           )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#6b2fa5]/10 rounded-lg flex items-center justify-center">
+              <Hash className="w-5 h-5 text-[#6b2fa5]" />
+            </div>
+            <label className="block text-sm font-bold text-gray-900">Quantity *</label>
+          </div>
+          <Input
+            type="number"
+            step="1"
+            min="0"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            placeholder="How many units are available?"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 hover:border-gray-400"
+          />
+          <p className="text-xs text-gray-500">Reduced automatically as orders come in.</p>
+          {errors.quantity && (
+            <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg p-3">
+              <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              {errors.quantity}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#6b2fa5]/10 rounded-lg flex items-center justify-center">
+              <Calendar className="w-5 h-5 text-[#6b2fa5]" />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-900">Selling Window (optional)</label>
+              <p className="text-xs text-gray-500">
+                You can start or stop selling at any time from{" "}
+                <Link href="/listings/manage" className="font-semibold text-[#6b2fa5] hover:underline">
+                  Manage Listings
+                </Link>
+                .
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Start date</label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 hover:border-gray-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">End date</label>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 hover:border-gray-400"
+              />
+            </div>
+          </div>
+          {errors.endDate && (
+            <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg p-3">
+              <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              {errors.endDate}
+            </div>
+          )}
+        </div>
+
+        {/* Fee burden */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#6b2fa5]/10 rounded-lg flex items-center justify-center">
+              <Percent className="w-5 h-5 text-[#6b2fa5]" />
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-900">Who pays the fees?</label>
+              <p className="text-xs text-gray-500">
+                Spotix's 5% platform fee + the Paystack processing fee. You can change this any time from Manage Listings.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setFeeBurdenChoice("buyer")}
+              className={`text-left p-4 rounded-lg border-2 transition-all duration-200 ${
+                feeBurdenChoice === "buyer"
+                  ? "border-[#6b2fa5] bg-[#6b2fa5]/5"
+                  : "border-gray-200 hover:border-gray-300"
+              }`}
+            >
+              <p className="font-semibold text-sm text-gray-900">Buyer pays the fees</p>
+              <p className="text-xs text-gray-500 mt-0.5">Added on top of your price at checkout. (Default)</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFeeBurdenChoice("organizer")}
+              className={`text-left p-4 rounded-lg border-2 transition-all duration-200 ${
+                feeBurdenChoice === "organizer"
+                  ? "border-[#6b2fa5] bg-[#6b2fa5]/5"
+                  : "border-gray-200 hover:border-gray-300"
+              }`}
+            >
+              <p className="font-semibold text-sm text-gray-900">I'll cover the fees</p>
+              <p className="text-xs text-gray-500 mt-0.5">Deducted from your payout instead.</p>
+            </button>
+          </div>
         </div>
 
         {errors.submit && (

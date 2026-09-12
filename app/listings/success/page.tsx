@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { CheckCircle, Plus, Settings, Sparkles } from "lucide-react"
+import { CheckCircle, Plus, Settings, Sparkles, PackageCheck, Rocket, Eye } from "lucide-react"
 
 export default function SuccessPage() {
   const router = useRouter()
@@ -51,16 +51,16 @@ export default function SuccessPage() {
 
         {/* Mini stats */}
         <div className="grid grid-cols-3 gap-3 mb-8">
-          <div className="bg-green-50 rounded-xl p-3 border border-green-100">
-            <div className="text-xl font-bold text-green-600 mb-0.5">✓</div>
+          <div className="bg-green-50 rounded-xl p-3 border border-green-100 flex flex-col items-center">
+            <PackageCheck className="w-5 h-5 text-green-600 mb-1" strokeWidth={2.25} />
             <div className="text-xs text-slate-500 font-medium">Listed</div>
           </div>
-          <div className="bg-[#6b2fa5]/5 rounded-xl p-3 border border-[#6b2fa5]/15">
-            <div className="text-xl font-bold text-[#6b2fa5] mb-0.5">🚀</div>
+          <div className="bg-[#6b2fa5]/5 rounded-xl p-3 border border-[#6b2fa5]/15 flex flex-col items-center">
+            <Rocket className="w-5 h-5 text-[#6b2fa5] mb-1" strokeWidth={2.25} />
             <div className="text-xs text-slate-500 font-medium">Live</div>
           </div>
-          <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-            <div className="text-xl font-bold text-blue-600 mb-0.5">👀</div>
+          <div className="bg-blue-50 rounded-xl p-3 border border-blue-100 flex flex-col items-center">
+            <Eye className="w-5 h-5 text-blue-600 mb-1" strokeWidth={2.25} />
             <div className="text-xs text-slate-500 font-medium">Visible</div>
           </div>
         </div>

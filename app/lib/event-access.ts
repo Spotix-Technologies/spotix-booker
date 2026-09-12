@@ -103,3 +103,14 @@ export function hasTab(access: Extract<EventAccessResult, { ok: true }>, tab: Ta
 export function isOwnerOrAdmin(access: Extract<EventAccessResult, { ok: true }>): boolean {
   return access.role === "owner" || access.role === "admin"
 }
+
+/** Who can schedule/cancel the Check-in tab's auto-sync-back-to-Firestore
+ *  job: the owner, the built-in Admin role, or a CUSTOM role that's been
+ *  explicitly granted the "checkin" permission. Deliberately excludes the
+ *  built-in "checkin" role (door staff) and "accountant" — scheduling an
+ *  automated Firestore write is a step above day-of scanning. */
+export function canManageCheckinAutoSync(access: Extract<EventAccessResult, { ok: true }>): boolean {
+  if (access.role === "owner" || access.role === "admin") return true
+  if (access.role === "custom") return access.tabs.includes("checkin")
+  return false
+}

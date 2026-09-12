@@ -40,13 +40,28 @@ const NAV_ITEMS = [
 // Width of the collapsed icon rail — also consumed by web-chrome.tsx to pad
 // page content so it never sits under the fixed sidebar.
 export const NAV_RAIL_WIDTH = "4rem"
+// Width of the expanded rail (matches the `w-56` class below) — consumed by
+// web-chrome.tsx so page content can push over in step with the rail instead
+// of sitting underneath it.
+export const NAV_RAIL_EXPANDED_WIDTH = "14rem"
 
-export function Nav() {
+interface NavProps {
+  // Controlled desktop-rail expand state. When omitted, Nav manages it
+  // internally (used by standalone pages that render <Nav /> without a
+  // surrounding WebChrome). WebChrome passes these so it can push page
+  // content over in step with the rail's own width transition.
+  railExpanded?: boolean
+  onRailExpandedChange?: (expanded: boolean) => void
+}
+
+export function Nav({ railExpanded: railExpandedProp, onRailExpandedChange }: NavProps = {}) {
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen]             = useState(false)
-  const [railExpanded, setRailExpanded]           = useState(false)
+  const [railExpandedState, setRailExpandedState] = useState(false)
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false)
+  const railExpanded = railExpandedProp !== undefined ? railExpandedProp : railExpandedState
+  const setRailExpanded = onRailExpandedChange ?? setRailExpandedState
   const { user, loading } = useAuth()
   const sidebarRef = useRef<HTMLDivElement>(null)
   const railRef = useRef<HTMLDivElement>(null)
@@ -193,7 +208,7 @@ export function Nav() {
 
           {/* Expand/collapse toggle */}
           <button
-            onClick={() => setRailExpanded((v) => !v)}
+            onClick={() => setRailExpanded(!railExpanded)}
             title={railExpanded ? "Collapse menu" : "Expand menu"}
             className="mx-2.5 mb-2 flex items-center justify-center gap-2 px-2.5 py-2 rounded-xl text-slate-400 hover:text-[#6b2fa5] hover:bg-[#6b2fa5]/8 transition-colors flex-shrink-0"
             aria-label={railExpanded ? "Collapse menu" : "Expand menu"}

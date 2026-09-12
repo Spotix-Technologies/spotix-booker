@@ -2,11 +2,13 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import {
-  User, Mail, ShoppingCart, CheckCircle2, XCircle, ChevronUp, ChevronDown,
+  User, Mail, ShoppingCart, CheckCircle2, XCircle, ChevronDown,
   Search, Filter, Download, X, Ticket, Clock, Hash, Loader2, FileBarChart2, FileSpreadsheet,
 } from "lucide-react"
 import RegistryDialog from "./helper/registry-dialog"
 import AttendeePostMortemDialog from "./helper/attendee-post-mortem-dialog"
+import AttendeeFilterDialog, { EMPTY_ATTENDEE_FILTERS, type AttendeeFilters } from "./attendee-filter"
+import Que from "./helper/ques"
 import { dicebearAvatarUrl } from "@/lib/dicebear"
 import { authFetch } from "@/lib/auth-client"
 import { useAuth } from "@/hooks/useAuth"
@@ -18,6 +20,7 @@ interface AttendeeData {
   ticketType: string
   verified: boolean
   purchaseDate: string
+  purchaseDateISO: string
   purchaseTime: string
   ticketReference: string
   facialEnroll: "enrolled" | "unenrolled"
@@ -30,6 +33,9 @@ interface AttendeesTabProps {
   eventName: string
   eventEndDate: string
   eventEnd: string
+  /** Ticket policy names configured on this event — powers the ticket-type
+   *  filter dropdown. */
+  ticketTypes: string[]
 }
 
 const PAGE_SIZE = 15
@@ -89,7 +95,7 @@ function AttendeeDialog({
               {loading ? "…" : `${emailTickets.length} ticket${emailTickets.length !== 1 ? "s" : ""} purchased`}
             </div>
             <div className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold ${
-              checkedInCount > 0 ? "bg-green-500/30 text-green-100" : "bg-white/10 text-white/70"
+              checkedInCount > 0 ? "bg-[#6b2fa5]/30 text-white" : "bg-white/10 text-white/70"
             }`}>
               <CheckCircle2 size={14} />
               {loading ? "…" : `${checkedInCount} checked in`}
@@ -109,11 +115,11 @@ function AttendeeDialog({
               <div
                 key={t.id}
                 className={`flex items-start gap-3 p-3.5 rounded-xl border transition-colors ${
-                  t.verified ? "border-green-200 bg-green-50" : "border-slate-200 bg-slate-50"
+                  t.verified ? "border-[#6b2fa5]/30 bg-[#6b2fa5]/5" : "border-slate-200 bg-slate-50"
                 }`}
               >
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
-                  t.verified ? "bg-green-200 text-green-700" : "bg-slate-200 text-slate-600"
+                  t.verified ? "bg-[#6b2fa5]/20 text-[#6b2fa5]" : "bg-slate-200 text-slate-600"
                 }`}>
                   {i + 1}
                 </div>
@@ -121,7 +127,7 @@ function AttendeeDialog({
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-semibold text-slate-900 truncate">{t.ticketType}</span>
                     {t.verified ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 border border-green-200 rounded-full px-2 py-0.5 flex-shrink-0">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#6b2fa5] bg-[#6b2fa5]/10 border border-[#6b2fa5]/20 rounded-full px-2 py-0.5 flex-shrink-0">
                         <CheckCircle2 size={10} /> Checked In
                       </span>
                     ) : (
@@ -160,6 +166,7 @@ export default function AttendeesTab({
   eventName,
   eventEndDate,
   eventEnd,
+  ticketTypes,
 }: AttendeesTabProps) {
   const { user } = useAuth()
 
@@ -181,10 +188,33 @@ export default function AttendeesTab({
   // full list is fetched once on first search and cached for the rest of
   // the tab's lifetime so repeated typing doesn't re-fetch every keystroke.
   const [searchTerm, setSearchTerm] = useState("")
-  const [checkInFilter, setCheckInFilter] = useState<"all" | "checkedIn" | "notCheckedIn">("all")
+  // Check-in / ticket-type / purchase-date-range filters, all combinable
+  // with each other and with search. Applied via the AttendeeFilterDialog
+  // (opened from the Filter button) rather than inline controls — the
+  // dialog stages its own draft and only calls onApply (below) when the
+  // admin clicks "Apply Filter". Pushed down to the server as query params
+  // for the default paginated view (see buildFilterParams below); in
+  // search mode they're applied client-side over the already-fetched full
+  // roster instead, alongside the free-text match.
+  const [filters, setFilters] = useState<AttendeeFilters>(EMPTY_ATTENDEE_FILTERS)
+  const { checkInFilter, ticketTypeFilter, startDate, endDate } = filters
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false)
+  // Count matching the CURRENT filter combo — distinct from totalCount
+  // (always event-wide, powers the summary cards). Used for the "Load 15
+  // more (x of y)" pager so it reads sensibly while filtered.
+  const [matchingCount, setMatchingCount] = useState(0)
   const [fullRoster, setFullRoster] = useState<AttendeeData[] | null>(null)
   const [searchingFullRoster, setSearchingFullRoster] = useState(false)
   const rosterFetchStarted = useRef(false)
+
+  // Targeted exact-match fast path for the search box: if what's typed
+  // looks like a complete email or a ticket reference ("refId"), try a
+  // real Firestore `where` query for just that one guest FIRST — that's
+  // 1 read instead of reading the whole attendees collection. Only when
+  // that comes back empty (a genuine partial/fuzzy name search, or a
+  // still-being-typed email/ref) do we fall back to ensureFullRoster().
+  const [targetedResults, setTargetedResults] = useState<AttendeeData[] | null>(null)
+  const [targetedLookupLoading, setTargetedLookupLoading] = useState(false)
 
   const [selectedAttendee, setSelectedAttendee] = useState<AttendeeData | null>(null)
   const [selectedAttendeeTickets, setSelectedAttendeeTickets] = useState<AttendeeData[]>([])
@@ -195,6 +225,24 @@ export default function AttendeesTab({
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const downloadMenuRef = useRef<HTMLDivElement>(null)
+
+  // Online (Supabase) check-in registry status — fetched once, independent
+  // of the paginated attendee load above, purely to power the "you're
+  // scanning online" ques below the controls.
+  const [checkinStatus, setCheckinStatus] = useState<{ hasRegistry: boolean; hasSyncKey: boolean } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    authFetch(`/api/event/list/${eventId}/checkin?action=status`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.success) {
+          setCheckinStatus({ hasRegistry: Boolean(data.hasRegistry), hasSyncKey: Boolean(data.hasSyncKey) })
+        }
+      })
+      .catch(() => { /* non-critical — the ques just don't show */ })
+    return () => { cancelled = true }
+  }, [eventId])
 
   const baseUrl = `/api/event/list/${eventId}/attendees`
 
@@ -219,14 +267,40 @@ export default function AttendeesTab({
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [downloadMenuOpen])
 
-  // ── Initial page load: first 15 attendees only ──
+  // ── Builds the combinable filter query params shared by the initial
+  // page load and "load more" — server-side filtering so pagination only
+  // ever returns matching rows, instead of filtering whatever happened to
+  // already be loaded on screen. ──
+  const buildFilterParams = useCallback(() => {
+    const params = new URLSearchParams()
+    if (checkInFilter === "checkedIn") params.set("checkedIn", "true")
+    else if (checkInFilter === "notCheckedIn") params.set("checkedIn", "false")
+    if (ticketTypeFilter.length > 0) params.set("ticketTypes", ticketTypeFilter.join(","))
+    if (startDate) params.set("startDate", startDate)
+    if (endDate) params.set("endDate", endDate)
+    return params
+  }, [checkInFilter, ticketTypeFilter, startDate, endDate])
+
+  const hasActiveFilters =
+    checkInFilter !== "all" || ticketTypeFilter.length > 0 || Boolean(startDate) || Boolean(endDate)
+  const activeFilterCount =
+    (checkInFilter !== "all" ? 1 : 0) +
+    (ticketTypeFilter.length > 0 ? 1 : 0) +
+    (startDate || endDate ? 1 : 0)
+
+  // ── Initial page load: first 15 attendees only. Re-runs whenever a
+  // filter changes too, so the paginated view resets to page 1 under the
+  // new filter combo (search mode ignores this — it filters the already-
+  // fetched full roster client-side instead, see filteredAttendees). ──
   useEffect(() => {
     let cancelled = false
     async function loadFirstPage() {
       setInitialLoading(true)
       setLoadError(null)
       try {
-        const res = await authFetch(`${baseUrl}?limit=${PAGE_SIZE}`)
+        const params = buildFilterParams()
+        params.set("limit", String(PAGE_SIZE))
+        const res = await authFetch(`${baseUrl}?${params.toString()}`)
         const data = await res.json()
         if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to load attendees")
         if (cancelled) return
@@ -236,6 +310,7 @@ export default function AttendeesTab({
         setTotalCount(data.totalCount ?? 0)
         setCheckedInCount(data.checkedInCount ?? 0)
         setNotCheckedInCount(data.notCheckedInCount ?? 0)
+        setMatchingCount(data.matchingCount ?? data.totalCount ?? 0)
       } catch (e: any) {
         if (!cancelled) setLoadError(e?.message ?? "Failed to load attendees")
       } finally {
@@ -245,14 +320,18 @@ export default function AttendeesTab({
     loadFirstPage()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId])
+  }, [eventId, filters])
 
-  // ── Load 15 more ──
+  // ── Load 15 more — carries the same filter params so the next page
+  // keeps matching whatever's currently filtered. ──
   const handleLoadMore = useCallback(async () => {
     if (!cursor || loadingMore) return
     setLoadingMore(true)
     try {
-      const res = await authFetch(`${baseUrl}?limit=${PAGE_SIZE}&cursor=${encodeURIComponent(cursor)}`)
+      const params = buildFilterParams()
+      params.set("limit", String(PAGE_SIZE))
+      params.set("cursor", cursor)
+      const res = await authFetch(`${baseUrl}?${params.toString()}`)
       const data = await res.json()
       if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to load more attendees")
       setItems((prev) => [...prev, ...(data.attendees ?? [])])
@@ -261,14 +340,17 @@ export default function AttendeesTab({
       setTotalCount(data.totalCount ?? totalCount)
       setCheckedInCount(data.checkedInCount ?? checkedInCount)
       setNotCheckedInCount(data.notCheckedInCount ?? notCheckedInCount)
+      setMatchingCount(data.matchingCount ?? matchingCount)
     } catch (e: any) {
       setLoadError(e?.message ?? "Failed to load more attendees")
     } finally {
       setLoadingMore(false)
     }
-  }, [cursor, loadingMore, baseUrl, totalCount, checkedInCount, notCheckedInCount])
+  }, [cursor, loadingMore, baseUrl, totalCount, checkedInCount, notCheckedInCount, matchingCount, buildFilterParams])
 
-  // ── Fetch the full roster once a search is actually typed in ──
+  // ── Fetch the full roster — now only a FALLBACK, once the targeted
+  // exact-match lookup below has come back empty. Still only ever fetched
+  // once per tab session (guarded the same way as before). ──
   const ensureFullRoster = useCallback(async () => {
     if (fullRoster || rosterFetchStarted.current) return
     rosterFetchStarted.current = true
@@ -286,29 +368,76 @@ export default function AttendeesTab({
     }
   }, [fullRoster, baseUrl])
 
+  // ── Targeted exact-match lookup — tried FIRST, debounced so it doesn't
+  // fire on every keystroke. A complete email or ticket reference costs
+  // one Firestore `where` query (~1 read); only a miss (or a search that
+  // isn't shaped like either — e.g. a name) falls through to the full
+  // roster fetch above. ──
   useEffect(() => {
-    if (searchTerm.trim()) ensureFullRoster()
-  }, [searchTerm, ensureFullRoster])
+    const term = searchTerm.trim()
+    if (!term) {
+      setTargetedResults(null)
+      return
+    }
+
+    const handle = setTimeout(async () => {
+      setTargetedLookupLoading(true)
+      try {
+        const isEmailLike = term.includes("@")
+        const param = isEmailLike
+          ? `email=${encodeURIComponent(term)}`
+          : `ticketReference=${encodeURIComponent(term)}`
+        const res = await authFetch(`${baseUrl}?${param}`)
+        const data = await res.json()
+        const results: AttendeeData[] = res.ok && data.success ? (data.attendees ?? []) : []
+
+        if (results.length > 0) {
+          setTargetedResults(results)
+        } else {
+          // No exact match — likely a partial/fuzzy name search (or an
+          // email/ref that's still being typed). Fall back to the full
+          // roster so substring matching still works as before.
+          setTargetedResults(null)
+          ensureFullRoster()
+        }
+      } catch {
+        setTargetedResults(null)
+        ensureFullRoster()
+      } finally {
+        setTargetedLookupLoading(false)
+      }
+    }, 400) // debounce — don't query on every keystroke
+
+    return () => clearTimeout(handle)
+  }, [searchTerm, baseUrl, ensureFullRoster])
 
   const isSearching = searchTerm.trim().length > 0
+  const usingTargetedResults = isSearching && Boolean(targetedResults && targetedResults.length > 0)
 
-  // While actively searching, filter over the full roster (once it's
-  // arrived). Otherwise, show whatever's been paginated in so far.
-  const sourceList = isSearching ? (fullRoster ?? []) : items
+  // While actively searching: an exact targeted match wins if we have one
+  // (cheapest + most precise); otherwise fall back to the full roster
+  // (once it's arrived). Outside search, show whatever's paginated in.
+  const sourceList = isSearching ? (usingTargetedResults ? targetedResults! : (fullRoster ?? [])) : items
 
   const filteredAttendees = useMemo(() => {
     return sourceList.filter((attendee) => {
       const matchesSearch =
         !isSearching ||
+        usingTargetedResults || // already an exact server-side match — don't re-filter by name/email substring
         attendee.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         attendee.fullName.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesFilter =
+      const matchesCheckIn =
         checkInFilter === "all" ||
         (checkInFilter === "checkedIn" && attendee.verified) ||
         (checkInFilter === "notCheckedIn" && !attendee.verified)
-      return matchesSearch && matchesFilter
+      const matchesTicketType =
+        ticketTypeFilter.length === 0 || ticketTypeFilter.includes(attendee.ticketType)
+      const matchesDate =
+        (!startDate || attendee.purchaseDateISO >= startDate) &&
+        (!endDate || attendee.purchaseDateISO <= endDate)
+      return matchesSearch && matchesCheckIn && matchesTicketType && matchesDate
     })
-  }, [sourceList, searchTerm, checkInFilter, isSearching])
+  }, [sourceList, searchTerm, checkInFilter, ticketTypeFilter, startDate, endDate, isSearching, usingTargetedResults])
 
   // Ticket-count badge (e.g. "×2") next to a name — needs counts across
   // the full roster, so it only lights up once search has fetched it;
@@ -409,32 +538,39 @@ export default function AttendeesTab({
   return (
     <div className="space-y-6">
       {/* Controls */}
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="relative flex-1">
+      <div className="flex flex-col md:flex-row md:flex-wrap gap-4">
+        <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input
-            placeholder="Search by email or name..."
+            placeholder="Search by email, ticket reference, or name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-white border-2 border-slate-200 rounded-xl focus:outline-none focus:border-[#6b2fa5] focus:ring-4 focus:ring-[#6b2fa5]/10 transition-all duration-200 placeholder:text-slate-400"
           />
-          {isSearching && searchingFullRoster && (
+          {isSearching && (targetedLookupLoading || searchingFullRoster) && (
             <Loader2 size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6b2fa5] animate-spin" />
           )}
         </div>
-        <div className="relative md:w-64">
-          <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-          <select
-            value={checkInFilter}
-            onChange={(e) => setCheckInFilter(e.target.value as any)}
-            className="w-full pl-12 pr-4 py-3 bg-white border-2 border-slate-200 rounded-xl focus:outline-none focus:border-[#6b2fa5] focus:ring-4 focus:ring-[#6b2fa5]/10 transition-all duration-200 appearance-none cursor-pointer"
-          >
-            <option value="all">All Attendees</option>
-            <option value="checkedIn">Checked In</option>
-            <option value="notCheckedIn">Not Checked In</option>
-          </select>
-          <ChevronUp className="absolute right-4 top-1/2 -translate-y-1/2 rotate-180 text-slate-400 pointer-events-none" size={20} />
-        </div>
+        {/* Filter — opens the AttendeeFilterDialog (check-in status,
+            ticket types, purchase-date range). Badge shows how many of
+            those three categories currently have an active selection. */}
+        <button
+          type="button"
+          onClick={() => setFilterDialogOpen(true)}
+          className={`relative flex items-center justify-center gap-2 px-5 py-3 rounded-xl border-2 font-semibold text-sm transition-all duration-200 whitespace-nowrap ${
+            hasActiveFilters
+              ? "border-[#6b2fa5] bg-[#6b2fa5]/5 text-[#6b2fa5]"
+              : "border-slate-200 text-slate-600 hover:border-slate-300"
+          }`}
+        >
+          <Filter size={18} />
+          Filter
+          {activeFilterCount > 0 && (
+            <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-[#6b2fa5] text-white text-[10px] font-bold flex items-center justify-center">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
 
         {/* Download dropdown — Guest Registry (existing export) or Post Mortem (new) */}
         <div className="relative" ref={downloadMenuRef}>
@@ -487,6 +623,22 @@ export default function AttendeesTab({
         </div>
       )}
 
+      {/* Online-registry ques — only once we know the status, and only
+          when there IS an online registry for this event */}
+      {checkinStatus?.hasRegistry && (
+        checkinStatus.hasSyncKey ? (
+          <Que
+            tone="info"
+            message="You are scanning online, don't forget to sync back from Spotix offline scanner software."
+          />
+        ) : (
+          <Que
+            tone="info"
+            message="You are scanning online, don't forget to set up auto sync or manually sync scanned tickets so they reflect here."
+          />
+        )
+      )}
+
       {/* Stats — from server aggregates, accurate even before everything's loaded */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-gradient-to-br from-[#6b2fa5] to-[#8b4fc5] rounded-xl p-5 text-white shadow-lg shadow-[#6b2fa5]/20">
@@ -502,18 +654,18 @@ export default function AttendeesTab({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-600">Checked In</p>
-              <p className="text-3xl font-bold text-green-600 mt-1">{checkedInCount}</p>
+              <p className="text-3xl font-bold text-[#6b2fa5] mt-1">{checkedInCount}</p>
             </div>
-            <CheckCircle2 size={32} className="text-green-500" />
+            <CheckCircle2 size={32} className="text-[#6b2fa5]" />
           </div>
         </div>
         <div className="bg-white rounded-xl p-5 border-2 border-slate-200 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-600">Not Checked In</p>
-              <p className="text-3xl font-bold text-amber-600 mt-1">{notCheckedInCount}</p>
+              <p className="text-3xl font-bold text-[#6b2fa5] mt-1">{notCheckedInCount}</p>
             </div>
-            <XCircle size={32} className="text-amber-500" />
+            <XCircle size={32} className="text-[#6b2fa5]" />
           </div>
         </div>
       </div>
@@ -568,7 +720,7 @@ export default function AttendeesTab({
                               />
                             </div>
                             {emailCount > 1 && (
-                              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-400 text-white text-[9px] font-bold flex items-center justify-center border border-white">
+                              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#6b2fa5] text-white text-[9px] font-bold flex items-center justify-center border border-white">
                                 {emailCount}
                               </span>
                             )}
@@ -577,14 +729,7 @@ export default function AttendeesTab({
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-slate-600">{attendee.email}</span>
-                          {emailCount > 1 && (
-                            <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 font-semibold flex-shrink-0">
-                              ×{emailCount}
-                            </span>
-                          )}
-                        </div>
+                        <span className="text-sm text-slate-600">{attendee.email}</span>
                       </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-[#6b2fa5]/10 to-[#8b4fc5]/10 text-[#6b2fa5] rounded-lg text-xs font-semibold border border-[#6b2fa5]/20">
@@ -608,8 +753,8 @@ export default function AttendeesTab({
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${
                           attendee.verified
-                            ? "bg-green-50 text-green-700 border border-green-200"
-                            : "bg-slate-50 text-slate-500 border border-slate-200"
+                            ? "bg-[#6b2fa5] text-white"
+                            : "bg-[#6b2fa5]/10 text-[#6b2fa5] border border-[#6b2fa5]/20"
                         }`}>
                           {attendee.verified
                             ? <><CheckCircle2 size={12} /> Checked In</>
@@ -628,11 +773,14 @@ export default function AttendeesTab({
                         <User size={32} className="text-slate-400" />
                       </div>
                       <p className="text-slate-600 font-medium">
-                        {searchTerm || checkInFilter !== "all" ? "No attendees match your search" : "No attendees yet"}
+                        {searchTerm || hasActiveFilters ? "No attendees match your filters" : "No attendees yet"}
                       </p>
-                      {(searchTerm || checkInFilter !== "all") && (
+                      {(searchTerm || hasActiveFilters) && (
                         <button
-                          onClick={() => { setSearchTerm(""); setCheckInFilter("all") }}
+                          onClick={() => {
+                            setSearchTerm("")
+                            setFilters(EMPTY_ATTENDEE_FILTERS)
+                          }}
                           className="text-sm text-[#6b2fa5] font-semibold hover:underline"
                         >
                           Clear filters
@@ -657,12 +805,21 @@ export default function AttendeesTab({
               {loadingMore ? (
                 <><Loader2 size={16} className="animate-spin" /> Loading…</>
               ) : (
-                <>Load 15 more ({items.length} of {totalCount})</>
+                <>Load 15 more ({items.length} of {matchingCount})</>
               )}
             </button>
           </div>
         )}
       </div>
+
+      {/* Attendee Filter Dialog */}
+      <AttendeeFilterDialog
+        open={filterDialogOpen}
+        onClose={() => setFilterDialogOpen(false)}
+        onApply={setFilters}
+        ticketTypes={ticketTypes}
+        appliedFilters={filters}
+      />
 
       {/* Registry Export Dialog */}
       <RegistryDialog
