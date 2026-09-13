@@ -5,17 +5,22 @@ import { ParticlesBackground } from "@/components/particles-background"
 // import { Nav } from "@/components/nav"
 import { EventTypeSelector } from "@/components/create-event/event-type-selector"
 import { CreateOneTimeEvent } from "@/components/create-event/create-one-time-event"
-import { CreateEventGroup } from "@/components/create-event/create-event-group"
+import { CreateEventGroup, type CreatedCollection } from "@/components/create-event/create-event-group"
 import { EventGroupLobby } from "@/components/create-event/event-group-lobby"
-import { CollectionSelector } from "@/components/create-event/collection-selector"
+import { CollectionSelector, type EventCollection } from "@/components/create-event/collection-selector"
+import { ManageCollectionEvents } from "@/components/create-event/manage-collection-events"
 import { ArrowLeft } from "lucide-react"
 import { useUnsavedChangesWarning } from "@/hooks/useUnsavedChangesWarning"
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog"
 
 export default function CreateEventPage() {
   const [eventType, setEventType] = useState<"one-time" | "event-group" | null>(null)
-  const [eventGroupStep, setEventGroupStep] = useState<"lobby" | "create" | "select" | null>(null)
-  const [selectedCollection, setSelectedCollection] = useState<any>(null)
+  // "create"  — creating a brand-new (empty) collection
+  // "select"  — picking which existing collection to manage
+  // "manage"  — adding/removing events on the collection picked in "select"
+  //             (or just created in "create")
+  const [eventGroupStep, setEventGroupStep] = useState<"lobby" | "create" | "select" | "manage" | null>(null)
+  const [activeCollection, setActiveCollection] = useState<EventCollection | CreatedCollection | null>(null)
 
   // Once the organizer has moved past the type picker into an actual form,
   // treat the session as "dirty" — covers the native browser prompt for a
@@ -27,7 +32,7 @@ export default function CreateEventPage() {
   const resetToTypeSelection = () => {
     setEventType(null)
     setEventGroupStep(null)
-    setSelectedCollection(null)
+    setActiveCollection(null)
   }
 
   return (
@@ -44,8 +49,11 @@ export default function CreateEventPage() {
             <>
               {/* Back Button — for the one-time flow this now renders inside
                   CreateOneTimeEvent itself, layered over the hero image
-                  (item 2), so it's skipped here to avoid a duplicate. */}
-              {eventType !== "one-time" && (
+                  (item 2), so it's skipped here to avoid a duplicate. Also
+                  skipped for "manage" — ManageCollectionEvents renders its
+                  own Back button (goes back to collection selection, not
+                  the event-type screen). */}
+              {eventType !== "one-time" && eventGroupStep !== "manage" && (
                 <div className="mb-8 animate-in fade-in slide-in-from-left duration-500">
                   <button
                     onClick={() => guardNavigation(resetToTypeSelection)()}
@@ -75,7 +83,9 @@ export default function CreateEventPage() {
                 </div>
               )}
 
-              {/* Create New Collection */}
+              {/* Create New Collection — a pure container (name/description/
+                  image). Landing straight in "manage" afterwards lets the
+                  organizer immediately start attaching events to it. */}
               {eventType === "event-group" && eventGroupStep === "create" && (
                 <div className="animate-in fade-in duration-700">
                   <div className="mb-8">
@@ -87,50 +97,40 @@ export default function CreateEventPage() {
                       Back to Event Group Options
                     </button>
                   </div>
-                  <CreateEventGroup selectedCollection={null} />
+                  <CreateEventGroup
+                    onCreated={(collection) => {
+                      setActiveCollection(collection)
+                      setEventGroupStep("manage")
+                    }}
+                  />
                 </div>
               )}
 
               {/* Collection Selector */}
-              {eventType === "event-group" && eventGroupStep === "select" && !selectedCollection && (
+              {eventType === "event-group" && eventGroupStep === "select" && (
                 <div className="animate-in fade-in duration-700">
                   <CollectionSelector
-                    onSelect={(collection) => setSelectedCollection(collection)}
+                    onSelect={(collection) => {
+                      setActiveCollection(collection)
+                      setEventGroupStep("manage")
+                    }}
                     onBack={() => setEventGroupStep(null)}
                   />
                 </div>
               )}
 
-              {/* Add to Selected Collection */}
-              {eventType === "event-group" && eventGroupStep === "select" && selectedCollection && (
+              {/* Manage Collection Events — add/remove already-created
+                  events on the selected (or just-created) collection. */}
+              {eventType === "event-group" && eventGroupStep === "manage" && activeCollection && (
                 <div className="animate-in fade-in duration-700">
-                  <div className="mb-8">
-                    <button
-                      onClick={() => guardNavigation(() => setSelectedCollection(null))()}
-                      className="group inline-flex items-center gap-2 px-5 py-3 text-sm font-semibold text-slate-700 hover:text-[#6b2fa5] bg-white hover:bg-[#6b2fa5]/5 border-2 border-slate-200 hover:border-[#6b2fa5]/30 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
-                    >
-                      <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-                      Back to Select Collection
-                    </button>
-                  </div>
-
-                  {/* Selected Collection Banner */}
-                  <div className="mb-8 p-6 bg-gradient-to-r from-[#6b2fa5]/10 to-purple-100/50 border-2 border-[#6b2fa5]/20 rounded-xl shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center w-12 h-12 bg-[#6b2fa5] rounded-xl shadow-md flex-shrink-0">
-                        <span className="text-white text-xl font-bold">📁</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-[#6b2fa5] mb-1">Adding to Collection</p>
-                        <p className="text-lg font-bold text-slate-900 truncate">{selectedCollection.name}</p>
-                        {selectedCollection.description && (
-                          <p className="text-sm text-slate-600 mt-1 line-clamp-1">{selectedCollection.description}</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <CreateEventGroup selectedCollection={selectedCollection} />
+                  <ManageCollectionEvents
+                    collectionId={activeCollection.id}
+                    collectionName={activeCollection.name}
+                    onBack={() => {
+                      setActiveCollection(null)
+                      setEventGroupStep("select")
+                    }}
+                  />
                 </div>
               )}
             </>

@@ -32,6 +32,36 @@ export function slugify(input: string): string {
     .slice(0, MAX_LENGTH)
 }
 
+/**
+ * Like slugify but safe to run on every keystroke of a slug input field.
+ *
+ * `slugify` opens with `.trim()`, which deletes a *trailing* space the
+ * instant it's typed — so on a controlled input, typing "hello" then the
+ * space bar produced "hello" again (trim ate the space before the
+ * `\s -> -` conversion ever saw it), and the next character typed just
+ * glued onto the previous word. The organizer effectively couldn't type
+ * a space at all.
+ *
+ * slugifyLive fixes this by never trimming the *trailing* edge and by
+ * converting whitespace to a hyphen immediately, so a trailing hyphen
+ * persists in the input while the organizer is mid-word. Leading
+ * whitespace/hyphens are still stripped (nothing to preserve there).
+ * `isValidSlug` correctly reports "invalid" for a slug with a trailing
+ * hyphen, which is the desired, expected state while still typing —
+ * finalization/submission still runs the strict `slugify`.
+ */
+export function slugifyLive(input: string): string {
+  return input
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "") // strip accents
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+/, "") // leading hyphens only — keep a live trailing one
+    .slice(0, MAX_LENGTH)
+}
+
 export function isValidSlug(slug: string): boolean {
   if (!slug) return false
   if (slug.length < MIN_LENGTH || slug.length > MAX_LENGTH) return false

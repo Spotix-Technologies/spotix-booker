@@ -11,7 +11,7 @@ import { uploadImage } from "@/lib/image-uploader"
 import { authFetch, getAccessToken } from "@/lib/auth-client"
 import { MapPickerModal } from "./map-picker-modal"
 import type { TicketType } from "@/types/ticket"
-import { slugify, isValidSlug } from "@/lib/slug"
+import { slugify, slugifyLive, isValidSlug } from "@/lib/slug"
 import { useEventDraft } from "@/hooks/useEventDraft"
 import type { FeeBurdenState } from "./helper/BurdenOfFeeCard"
 import type { SlugStatus } from "./helper/EventBioData"
@@ -133,13 +133,16 @@ export function CreateOneTimeEvent({ onSuccess, onBack }: CreateOneTimeEventProp
   // themselves (item 5).
   useEffect(() => {
     if (!slugTouched) {
-      setEventSlug(slugify(eventName))
+      setEventSlug(slugifyLive(eventName))
     }
   }, [eventName, slugTouched])
 
+  // Uses slugifyLive (not the strict `slugify`) so a space typed at the
+  // end of the field becomes a hyphen instead of being silently eaten —
+  // see the comment on slugifyLive in lib/slug.ts.
   const handleEventSlugChange = useCallback((value: string) => {
     setSlugTouched(true)
-    setEventSlug(slugify(value))
+    setEventSlug(slugifyLive(value))
   }, [])
 
   // Debounced live availability check against /api/event/slug-check.

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react"
-import { MapPin, MapPinned, CheckCircle, Navigation, ChevronDown, ChevronUp, Globe2, Loader2 } from "lucide-react"
+import { MapPin, MapPinned, CheckCircle, Navigation, ChevronDown, ChevronUp, Globe2 } from "lucide-react"
 import { fetchCountriesWithStates, type CountryStates } from "@/lib/countries"
+import { SearchableSelect } from "./SearchableSelect"
 
 interface EventLocationProps {
   eventVenue: string
@@ -150,25 +151,19 @@ export function EventLocation({
             <Globe2 className="w-4 h-4 text-[#6b2fa5]" />
             Country <span className="text-red-500">*</span>
           </label>
-          <div className="relative">
-            <select
-              value={country}
-              onChange={(e) => handleCountryChange(e.target.value)}
-              disabled={countriesLoading}
-              required
-              className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 text-slate-900 disabled:bg-slate-50 disabled:text-slate-400"
-            >
-              <option value="">{countriesLoading ? "Loading countries..." : "Select a country"}</option>
-              {allCountries.map((c) => (
-                <option key={c.iso2} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            {countriesLoading && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin pointer-events-none" />
-            )}
-          </div>
+          <SearchableSelect
+            value={country}
+            onChange={handleCountryChange}
+            // CountriesNow's dataset has a couple of duplicate-name entries
+            // (e.g. two rows both named "Congo" for the Republic vs. the
+            // DRC) — dedupe by name so the list only shows one, using
+            // whichever entry appears first.
+            options={Array.from(new Set(allCountries.map((c) => c.name)))}
+            loading={countriesLoading}
+            loadingPlaceholder="Loading countries..."
+            placeholder="Type to search countries..."
+            required
+          />
           {countriesError && (
             <p className="mt-1.5 text-xs text-amber-600">
               Couldn't load the country list — you can still type your venue below and try again shortly.
@@ -181,22 +176,15 @@ export function EventLocation({
             <Globe2 className="w-4 h-4 text-[#6b2fa5]" />
             State / Region <span className="text-red-500">*</span>
           </label>
-          <select
+          <SearchableSelect
             value={state}
-            onChange={(e) => setState(e.target.value)}
+            onChange={setState}
+            options={Array.from(new Set(statesForCountry.map((s) => s.name)))}
             disabled={!country || statesForCountry.length === 0}
+            disabledPlaceholder={!country ? "Select a country first" : "No states listed"}
+            placeholder="Type to search states..."
             required
-            className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 text-slate-900 disabled:bg-slate-50 disabled:text-slate-400"
-          >
-            <option value="">
-              {!country ? "Select a country first" : statesForCountry.length === 0 ? "No states listed" : "Select a state"}
-            </option>
-            {statesForCountry.map((s) => (
-              <option key={s.state_code || s.name} value={s.name}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+          />
         </div>
       </div>
 

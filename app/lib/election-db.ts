@@ -112,6 +112,77 @@ export async function updateEditGraceDays(electionId: string, editGraceDays: num
   if (error) throw new Error(error.message)
 }
 
+/**
+ * General-purpose election details editor — name, description, image,
+ * the voting window, and the candidate edit-grace window, all in one
+ * PATCH. Superset of updateEditGraceDays above (kept separate since a
+ * couple of other call sites only ever touch that one field). Every
+ * field is optional; only the ones present in `input` are written.
+ *
+ * Changing votingStartsAt/votingEndsAt after candidates/voters already
+ * exist is allowed on purpose — organisers routinely need to push a
+ * voting window back a day, and nothing here depends on the original
+ * dates (unlike edit_grace_days, which is read relative to each
+ * candidate's own created_at, not the election's dates).
+ */
+export async function updateElection(
+  electionId: string,
+  input: Partial<{
+    name: string
+    description: string
+    image: string
+    votingStartsAt: string | null
+    votingEndsAt: string | null
+    editGraceDays: number
+  }>
+) {
+  const patch: Record<string, any> = {}
+
+  if (input.name !== undefined) {
+    if (!input.name.trim()) throw new Error("name can't be empty")
+    patch.name = input.name.trim()
+  }
+  if (input.description !== undefined) patch.description = input.description
+  if (input.image !== undefined) patch.image = input.image
+  if (input.votingStartsAt !== undefined) patch.voting_starts_at = input.votingStartsAt
+  if (input.votingEndsAt !== undefined) patch.voting_ends_at = input.votingEndsAt
+  if (input.editGraceDays !== undefined) {
+    if (!Number.isInteger(input.editGraceDays) || input.editGraceDays < 0) {
+      throw new Error("editGraceDays must be a non-negative integer")
+    }
+    patch.edit_grace_days = input.editGraceDays
+  }
+
+  if (Object.keys(patch).length === 0) return
+
+  // Validate the resulting start/end pair even when only one side of it
+  // is being changed this call — fetch whichever side isn't in `patch`
+  // so e.g. pushing just votingEndsAt earlier than an already-saved
+  // votingStartsAt still gets caught here instead of silently saving.
+  if (patch.voting_starts_at !== undefined || patch.voting_ends_at !== undefined) {
+    let effectiveStart = patch.voting_starts_at
+    let effectiveEnd = patch.voting_ends_at
+    if (effectiveStart === undefined || effectiveEnd === undefined) {
+      const { data: current, error: fetchErr } = await supabaseAdmin
+        .from("elections")
+        .select("voting_starts_at, voting_ends_at")
+        .eq("id", electionId)
+        .maybeSingle()
+      if (fetchErr) throw new Error(fetchErr.message)
+      if (effectiveStart === undefined) effectiveStart = current?.voting_starts_at ?? null
+      if (effectiveEnd === undefined) effectiveEnd = current?.voting_ends_at ?? null
+    }
+    if (effectiveStart && effectiveEnd && new Date(effectiveEnd).getTime() <= new Date(effectiveStart).getTime()) {
+      throw new Error("Voting end must be after voting start")
+    }
+  }
+
+  patch.updated_at = new Date().toISOString()
+  const { data, error } = await supabaseAdmin.from("elections").update(patch).eq("id", electionId).select().single()
+  if (error) throw new Error(error.message)
+  return data
+}
+
 /** Irreversible — see the confirmation dialog required on the Booker UI. */
 export async function publishResults(electionId: string) {
   const { error } = await supabaseAdmin

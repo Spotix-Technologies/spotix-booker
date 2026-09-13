@@ -94,17 +94,17 @@ export function EventGroupLobby({ onCreateCollection, onAddToCollection, onBack 
           {
             action: onAddToCollection,
             icon: FolderCheck,
-            title: "Add to Existing Collection",
-            tag: "Add to existing",
-            desc: "Pick one of your existing collections and slot in a new event date.",
+            title: "Manage a Collection",
+            tag: "Add or remove events",
+            desc: "Pick one of your collections, then attach events you've already created to it — or remove ones you no longer want in there.",
             features: [
               "Browse your collections",
-              "Inherit collection settings",
-              "Override pricing per instance",
-              "Quick setup — fewer steps",
+              "Search your existing events",
+              "Attach an event with one click",
+              "Remove events just as easily",
             ],
             footer: "Requires an existing collection",
-            cta: "Add event",
+            cta: "Manage",
           },
         ].map(({ action, icon: Icon, title, tag, desc, features, footer, cta }) => (
           <button
@@ -156,7 +156,7 @@ export function EventGroupLobby({ onCreateCollection, onAddToCollection, onBack 
         <p className="text-sm text-blue-800 leading-relaxed">
           <span className="font-medium">Tip:</span> Collections help you organise recurring events
           like monthly workshops or seasonal festivals. Create a new collection to start fresh, or
-          add to an existing one to continue your series.
+          manage an existing one to attach events you've already created to it.
         </p>
       </div>
     </div>

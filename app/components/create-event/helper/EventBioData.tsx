@@ -196,7 +196,7 @@ export function EventBioData({
                 {slugStatus === "taken" && "That link is already taken — try something else."}
                 {slugStatus === "invalid" && "3–60 characters, lowercase letters, numbers, and hyphens only."}
                 {(slugStatus === "idle" || slugStatus === "checking" || slugStatus === "available") &&
-                  "Edit freely — this is what attendees will see and share. Old links keep working either way."}
+                  "This is what you will share to people."}
               </p>
             </div>
           )}

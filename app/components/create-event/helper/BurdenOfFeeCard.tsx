@@ -63,14 +63,14 @@ export function BurdenOfFeeCard({ feeBurden, setFeeBurden }: BurdenOfFeeCardProp
         <h4 className="font-bold text-lg text-slate-900">Who pays the fees?</h4>
         <p className="text-sm text-slate-600 mt-0.5">
           Choose whether you or your attendees cover each fee. Both are off by default, meaning
-          attendees pay them — same as before.
+          attendees pay them. You can change this later in the event's settings.
         </p>
       </div>
 
       <ToggleRow
         icon={CreditCard}
         title="I'll cover the payment provider's fee"
-        description="Paystack's processing fee is absorbed by you instead of added to the attendee's total."
+        description="Payment provider's processing fee is absorbed by you instead of added to the attendee's total."
         checked={feeBurden.coversPaystackFee}
         onChange={(checked) => setFeeBurden({ ...feeBurden, coversPaystackFee: checked })}
       />

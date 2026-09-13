@@ -1,17 +1,17 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { auth, db } from "@/lib/firebase"
-import { collection, getDocs } from "firebase/firestore"
+import { authFetch } from "@/lib/auth-client"
 import { ArrowLeft, Search, FolderOpen, Sparkles } from "lucide-react"
 import Image from "next/image"
 import { Preloader } from "@/components/preloader"
 
-interface EventCollection {
+export interface EventCollection {
   id: string
   name: string
   image: string
   description: string
+  eventCount: number
 }
 
 interface CollectionSelectorProps {
@@ -22,31 +22,19 @@ interface CollectionSelectorProps {
 export function CollectionSelector({ onSelect, onBack }: CollectionSelectorProps) {
   const [collections, setCollections] = useState<EventCollection[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
     const fetchCollections = async () => {
       try {
-        const user = auth.currentUser
-        if (!user) return
-
-        const collectionsRef = collection(db, "EventCollection", user.uid, "collections")
-        const snapshot = await getDocs(collectionsRef)
-
-        const fetchedCollections: EventCollection[] = []
-        snapshot.forEach((doc) => {
-          const data = doc.data()
-          fetchedCollections.push({
-            id: doc.id,
-            name: data.name || doc.id,
-            image: data.image || "",
-            description: data.description || "",
-          })
-        })
-
-        setCollections(fetchedCollections)
-      } catch (error) {
-        console.error("Error fetching collections:", error)
+        const res = await authFetch("/api/collections")
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || "Failed to load collections")
+        setCollections(data.collections || [])
+      } catch (err: any) {
+        console.error("Error fetching collections:", err)
+        setError(err.message || "Failed to load collections")
       } finally {
         setLoading(false)
       }
@@ -80,15 +68,15 @@ export function CollectionSelector({ onSelect, onBack }: CollectionSelectorProps
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-[#6b2fa5] to-purple-600 rounded-2xl shadow-lg shadow-[#6b2fa5]/30 mb-4">
             <FolderOpen className="w-8 h-8 text-white" />
           </div>
-          
+
           <h1 className="text-5xl font-bold bg-gradient-to-r from-[#6b2fa5] via-[#8b3fc5] to-[#6b2fa5] bg-clip-text text-transparent">
-            Select a Collection
+            Manage a Collection
           </h1>
-          
+
           <p className="text-lg text-slate-600">
-            Choose which event collection to add this event to
+            Choose a collection to add or remove events from
           </p>
-          
+
           {/* Collection Count Badge */}
           {collections.length > 0 && (
             <div className="inline-flex items-center gap-2 bg-[#6b2fa5]/10 border border-[#6b2fa5]/20 rounded-full px-4 py-2">
@@ -99,6 +87,12 @@ export function CollectionSelector({ onSelect, onBack }: CollectionSelectorProps
             </div>
           )}
         </div>
+
+        {error && (
+          <div className="max-w-2xl mx-auto p-4 rounded-xl bg-red-50 border-2 border-red-200 text-red-800 text-sm text-center">
+            {error}
+          </div>
+        )}
 
         {/* Search Bar */}
         <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-top-4 duration-700">
@@ -112,7 +106,7 @@ export function CollectionSelector({ onSelect, onBack }: CollectionSelectorProps
               className="w-full pl-12 pr-4 py-3.5 border-2 border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] focus:border-[#6b2fa5] transition-all duration-200 shadow-sm hover:shadow-md text-slate-900 placeholder:text-slate-400"
             />
           </div>
-          
+
           {/* Search Results Count */}
           {searchTerm && (
             <div className="mt-3 text-sm text-slate-600 animate-in fade-in duration-300">
@@ -122,23 +116,23 @@ export function CollectionSelector({ onSelect, onBack }: CollectionSelectorProps
         </div>
 
         {/* Collections Grid */}
-        {filteredCollections.length === 0 ? (
+        {!loading && filteredCollections.length === 0 ? (
           <div className="max-w-md mx-auto">
             <div className="bg-gradient-to-br from-slate-50 to-purple-50/30 border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center animate-in zoom-in-95 fade-in duration-700">
               <div className="inline-flex items-center justify-center w-20 h-20 bg-slate-100 rounded-full mb-6">
                 <FolderOpen className="w-10 h-10 text-slate-400" />
               </div>
-              
+
               <h3 className="text-xl font-bold text-slate-900 mb-3">
                 {collections.length === 0 ? "No Collections Yet" : "No Results Found"}
               </h3>
-              
+
               <p className="text-slate-600 mb-6">
                 {collections.length === 0
                   ? "Create your first collection to organize your events."
                   : `No collections match "${searchTerm}". Try a different search term.`}
               </p>
-              
+
               {searchTerm && (
                 <button
                   onClick={() => setSearchTerm("")}
@@ -159,7 +153,7 @@ export function CollectionSelector({ onSelect, onBack }: CollectionSelectorProps
               >
                 {/* Gradient accent line */}
                 <div className="h-1 bg-gradient-to-r from-[#6b2fa5] via-purple-400 to-[#6b2fa5] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                
+
                 {/* Collection Image */}
                 {collection.image ? (
                   <div className="relative h-48 w-full overflow-hidden bg-slate-100">
@@ -180,19 +174,24 @@ export function CollectionSelector({ onSelect, onBack }: CollectionSelectorProps
 
                 {/* Content */}
                 <div className="p-5 space-y-3">
-                  <h3 className="font-bold text-xl text-slate-900 group-hover:text-[#6b2fa5] transition-colors duration-200 line-clamp-1">
-                    {collection.name}
-                  </h3>
-                  
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-bold text-xl text-slate-900 group-hover:text-[#6b2fa5] transition-colors duration-200 line-clamp-1">
+                      {collection.name}
+                    </h3>
+                    <span className="flex-shrink-0 text-xs font-semibold text-slate-500 bg-slate-100 rounded-full px-2.5 py-1">
+                      {collection.eventCount} {collection.eventCount === 1 ? "event" : "events"}
+                    </span>
+                  </div>
+
                   {collection.description && (
                     <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed">
                       {collection.description}
                     </p>
                   )}
-                  
+
                   {/* Select indicator */}
                   <div className="flex items-center gap-2 text-sm font-semibold text-[#6b2fa5] opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <span>Select Collection</span>
+                    <span>Manage Events</span>
                     <ArrowLeft className="w-4 h-4 rotate-180" />
                   </div>
                 </div>

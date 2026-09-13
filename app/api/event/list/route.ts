@@ -175,6 +175,7 @@ function shapeEvent(id: string, data: FirebaseFirestore.DocumentData, now: Date)
   return {
     id,
     eventName:     data.eventName    ?? "Unnamed Event",
+    eventImage:    data.eventImage   ?? null,
     eventDate:     eventDate.toISOString(),
     eventType:     data.eventType    ?? "Other",
     isFree:        data.isFree       ?? false,
@@ -184,6 +185,7 @@ function shapeEvent(id: string, data: FirebaseFirestore.DocumentData, now: Date)
     status:        mapStatus(data.status, isPast),
     eventVenue:    data.eventVenue   ?? "No venue specified",
     hasMaxSize:    data.enableMaxSize ?? false,
+    collectionId:  data.collectionId ?? null,
   }
 }
 

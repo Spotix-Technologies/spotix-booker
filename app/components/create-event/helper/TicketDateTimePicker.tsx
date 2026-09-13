@@ -156,12 +156,12 @@ export function TicketDateTimePicker({
       let h = hour + delta
       if (h > 12) h = 1
       if (h < 1) h = 12
-      onChangeTime(from12h(h, minute, period))
+      onChangeTime?.(from12h(h, minute, period))
     } else {
       let m = minute + delta
       if (m > 59) m = 0
       if (m < 0) m = 59
-      onChangeTime(from12h(hour, m, period))
+      onChangeTime?.(from12h(hour, m, period))
     }
   }
 
