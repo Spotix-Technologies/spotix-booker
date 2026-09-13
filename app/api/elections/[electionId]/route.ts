@@ -12,14 +12,17 @@
  * since the deadline is computed from each candidate's own created_at +
  * this value, not stored per row. All fields are optional — only the
  * ones present in the body are updated (see updateElection in
- * lib/election-db.ts).
+ * lib/election-db.ts). Also accepts allowVoterPrefill — the "Allow
+ * Voters Pre-fill" toggle (see VotersTab.tsx's AllowVoterPrefillCard),
+ * which spotix-vote's /election/{electionId}/open page reads before
+ * letting a voter self-enlist.
  */
 
 import { NextRequest, NextResponse } from "next/server"
 import { listOffices, countVoters, updateElection } from "@/lib/election-db"
 import { requireElectionOwner } from "@/lib/election-auth"
 
-const EDITABLE_FIELDS = ["name", "description", "image", "votingStartsAt", "votingEndsAt", "editGraceDays"] as const
+const EDITABLE_FIELDS = ["name", "description", "image", "votingStartsAt", "votingEndsAt", "editGraceDays", "allowVoterPrefill"] as const
 
 export async function GET(_req: Request, { params }: { params: Promise<{ electionId: string }> }) {
   const { electionId } = await params

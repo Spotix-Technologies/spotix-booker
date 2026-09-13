@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { Trash2, Edit2, Package, Hash, Calendar, Power } from "lucide-react"
+import { Trash2, Edit2, Package, Hash, Calendar, Power, Wallet } from "lucide-react"
 import { deleteListing } from "@/lib/listing-utils"
 import { authFetch } from "@/lib/auth-client"
 import { EditListingModal } from "./edit-listing-modal"
@@ -175,6 +175,26 @@ export function ListingCard({ listing, userId, onUpdate }: ListingCardProps) {
               </div>
               <span className="ml-11 whitespace-nowrap font-semibold text-sm opacity-0 group-hover/orders:opacity-100 transition-opacity duration-300">
                 Orders
+              </span>
+            </button>
+
+            {/* Payouts Button */}
+            <button
+              onClick={() => router.push(`/listings/manage/${listing.id}/payouts`)}
+              className="group/payouts relative flex items-center h-11 rounded-lg bg-[#6b2fa5] hover:bg-[#5a2589] text-white transition-all duration-300 ease-out overflow-hidden shadow-sm hover:shadow-md"
+              style={{ width: '44px' }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.width = '130px'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.width = '44px'
+              }}
+            >
+              <div className="absolute left-3 flex items-center justify-center">
+                <Wallet size={18} className="flex-shrink-0 transition-transform group-hover/payouts:scale-110" />
+              </div>
+              <span className="ml-11 whitespace-nowrap font-semibold text-sm opacity-0 group-hover/payouts:opacity-100 transition-opacity duration-300">
+                Payouts
               </span>
             </button>
 

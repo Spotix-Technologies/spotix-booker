@@ -134,6 +134,7 @@ export async function updateElection(
     votingStartsAt: string | null
     votingEndsAt: string | null
     editGraceDays: number
+    allowVoterPrefill: boolean
   }>
 ) {
   const patch: Record<string, any> = {}
@@ -151,6 +152,16 @@ export async function updateElection(
       throw new Error("editGraceDays must be a non-negative integer")
     }
     patch.edit_grace_days = input.editGraceDays
+  }
+  // Allow Voters Pre-fill — see spotix-vote's /election/{electionId}/open
+  // page, which only accepts self-enlisted voters while this is true.
+  // The organiser-facing toggle (EditElectionDialog / VotersTab) is
+  // responsible for surfacing the "Spotix is not responsible for
+  // unauthorized voting..." warning before this ever gets set to true;
+  // this function itself doesn't gate on anything beyond the boolean check.
+  if (input.allowVoterPrefill !== undefined) {
+    if (typeof input.allowVoterPrefill !== "boolean") throw new Error("allowVoterPrefill must be a boolean")
+    patch.allow_voter_prefill = input.allowVoterPrefill
   }
 
   if (Object.keys(patch).length === 0) return
@@ -491,6 +502,79 @@ export async function listVoters(electionId: string) {
     .order("created_at", { ascending: false })
   if (error) throw new Error(error.message)
   return data ?? []
+}
+
+/** Scoped to electionId so one organiser can't guess another organiser's voterId. */
+export async function getVoter(electionId: string, voterId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("election_voters")
+    .select("id, email, name, phone, meta, created_at")
+    .eq("id", voterId)
+    .eq("election_id", electionId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data
+}
+
+/**
+ * Partial update of one voter's email/name/phone/meta — only fields
+ * present in `input` are changed. `meta` is shallow-merged onto the
+ * existing meta object rather than replaced outright, so an edit that
+ * only touches one custom field doesn't wipe out the others. Callers
+ * (see the [voterId] route) are expected to validate the *resulting*
+ * merged record against this election's voter_fields spec before
+ * calling this — same enforcement a fresh manual entry gets — since
+ * this function itself doesn't have the field spec in scope.
+ */
+export async function updateVoter(
+  electionId: string,
+  voterId: string,
+  input: Partial<{ email: string; name: string; phone: string; meta: Record<string, string> }>
+): Promise<{ ok: true; voter: any } | { ok: false; reason: "not_found" | "duplicate_email" }> {
+  const existing = await getVoter(electionId, voterId)
+  if (!existing) return { ok: false, reason: "not_found" }
+
+  const patch: Record<string, any> = {}
+  if (input.email !== undefined) patch.email = input.email.trim()
+  if (input.name !== undefined) patch.name = input.name.trim()
+  if (input.phone !== undefined) patch.phone = input.phone.trim()
+  if (input.meta !== undefined) patch.meta = { ...(existing.meta ?? {}), ...input.meta }
+
+  if (Object.keys(patch).length === 0) return { ok: true, voter: existing }
+
+  const { data, error } = await supabaseAdmin
+    .from("election_voters")
+    .update(patch)
+    .eq("id", voterId)
+    .eq("election_id", electionId)
+    .select("id, email, name, phone, meta, created_at")
+    .maybeSingle()
+
+  if (error) {
+    // uq_voter_email_per_election — same constraint addVoters() guards against.
+    if (error.code === "23505") return { ok: false, reason: "duplicate_email" }
+    throw new Error(error.message)
+  }
+  return { ok: true, voter: data }
+}
+
+/**
+ * Outright removal. Hard delete, not a soft-delete/status flag — there's
+ * no vote-tracking table in this repo (votes live in spotix-vote against
+ * the same Supabase project) to check whether this voter already cast a
+ * ballot, so this doesn't attempt to block or warn on that; the Booker UI
+ * calling this should confirm with the organiser before hitting it.
+ */
+export async function deleteVoter(electionId: string, voterId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("election_voters")
+    .delete()
+    .eq("id", voterId)
+    .eq("election_id", electionId)
+    .select("id")
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return !!data
 }
 
 export async function countVoters(electionId: string): Promise<number> {

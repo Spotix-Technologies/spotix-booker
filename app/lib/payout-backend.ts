@@ -11,17 +11,21 @@ export function buildNarration({
   isEvent,
   isPoll,
   isElection,
+  isMerch,
   eventName,
   pollName,
   electionName,
+  merchName,
   payDate,
 }: {
   isEvent: boolean
   isPoll: boolean
   isElection?: boolean
+  isMerch?: boolean
   eventName?: string | null
   pollName?: string | null
   electionName?: string | null
+  merchName?: string | null
   payDate: string
 }): string {
   if (isEvent) {
@@ -32,6 +36,9 @@ export function buildNarration({
   }
   if (isElection) {
     return `Payout for your ${electionName || "election"} election forms for ${payDate}`
+  }
+  if (isMerch) {
+    return `Payout for your ${merchName || "listing"} merch sales for ${payDate}`
   }
   return `Spotix payout for ${payDate}`
 }

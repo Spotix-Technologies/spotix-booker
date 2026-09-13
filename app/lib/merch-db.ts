@@ -57,10 +57,19 @@ export interface MerchListing {
    *  onto Spotix's own books). */
   feeBurden: { coversSpotixFee: boolean; coversPaystackFee: boolean }
   createdAt: string
+  /** Admin-set kill switch — same idea as events.flagged. Checked by
+   *  POST /api/listings/{id}/payout before a payout can be requested. */
+  flagged: boolean
+  flaggedReason: string | null
+  /** Running total actually paid out via Paystack transfer — incremented
+   *  atomically by the increment_merch_paid_out() RPC once a payout
+   *  resolves successfully (see v1/lib/payout/products/merch.js).
+   *  Distinct from totalAmount (gross sales) and totalSold (units). */
+  totalPaidOut: number
 }
 
 const LISTING_COLUMNS =
-  "id, booker_id, product_name, description, price, images, quantity, start_date, end_date, total_amount, total_sold, status, fee_burden, created_at"
+  "id, booker_id, product_name, description, price, images, quantity, start_date, end_date, total_amount, total_sold, status, fee_burden, created_at, flagged, flagged_reason, total_paid_out"
 
 const DEFAULT_FEE_BURDEN = { coversSpotixFee: false, coversPaystackFee: false }
 
@@ -86,6 +95,9 @@ function mapListingRow(row: any): MerchListing {
           }
         : DEFAULT_FEE_BURDEN,
     createdAt: row.created_at ?? "",
+    flagged: row.flagged === true,
+    flaggedReason: row.flagged_reason ?? null,
+    totalPaidOut: Number(row.total_paid_out ?? 0),
   }
 }
 

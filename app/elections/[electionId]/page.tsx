@@ -164,7 +164,7 @@ export default function ElectionDashboardPage() {
       {/* ── Tab content ────────────────────────────────────────────── */}
       <div className="mt-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         {tab === "offices" && <OfficesTab electionId={electionId} offices={offices} onChanged={reload} />}
-        {tab === "voters" && <VotersTab electionId={electionId} />}
+        {tab === "voters" && <VotersTab electionId={electionId} election={election} onChanged={reload} />}
         {tab === "candidates" && <CandidatesTab electionId={electionId} offices={offices} />}
         {tab === "results" && <ResultsTab electionId={electionId} offices={offices} election={election} onPublished={reload} />}
         {tab === "payout" && <PayoutTab electionId={electionId} />}

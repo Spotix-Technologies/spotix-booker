@@ -14,7 +14,7 @@
  * the next navigation (handled by auth-client.ts). If it hasn't, the user is
  * redirected to /login with their intended path preserved.
  *
- * ── Cookie responsibilities
+ *  Cookie responsibilities
  *
  *   spotix_at   httpOnly, Secure, SameSite=Lax, Max-Age=15min  ← JWT access token
  *               Set by: POST /api/auth, POST /api/auth/refresh
@@ -28,7 +28,7 @@
  * NOTE: refresh token cookies are httpOnly so the client JS never sees the raw
  * value. The client asks /api/auth/refresh which reads them server-side.
  *
- * ── Route rules
+ *  Route rules
  *
  *   Public          /login                     Always accessible
  *   Non-booker      /not-booker                Accessible only when authenticated
@@ -41,7 +41,7 @@ import type { NextRequest } from "next/server";
 import { verifyAccessTokenEdge } from "@/lib/auth-edge";
 import { PAYOUT_ACCESS_HEADER } from "@/lib/payout-access-gate";
 
-// ── Route classification
+//  Route classification
 
 /** Completely public — no token required, no redirect for unauthenticated users */
 const PUBLIC_ROUTES = new Set(["/login"]);
@@ -52,15 +52,16 @@ const PUBLIC_ROUTES = new Set(["/login"]);
  */
 const NON_BOOKER_ROUTES = new Set(["/not-booker"]);
 
-// ── Cookie name (must match what /api/auth sets)
+//  Cookie name (must match what /api/auth sets)
 const ACCESS_TOKEN_COOKIE = "spotix_at";
 
-/** Matches /api/payout, /api/polls/payout, and /api/elections/{id}/payout. */
+/** Matches /api/payout, /api/polls/payout, /api/elections/{id}/payout, and /api/listings/{id}/payout. */
 function isPayoutApiRoute(pathname: string): boolean {
   return (
     pathname.startsWith("/api/payout") ||
     pathname.startsWith("/api/polls/payout") ||
-    /^\/api\/elections\/[^/]+\/payout/.test(pathname)
+    /^\/api\/elections\/[^/]+\/payout/.test(pathname) ||
+    /^\/api\/listings\/[^/]+\/payout/.test(pathname)
   );
 }
 
@@ -84,12 +85,12 @@ function noStore(response: NextResponse): NextResponse {
   return response;
 }
 
-// ── proxy ─────────────────────────────────────────────────────────────────
+//  proxy 
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // ── 0. Payout API routes — inject the server-only access secret
+  //  0. Payout API routes — inject the server-only access secret
   // These bypass the booker page-auth flow below entirely: they're API
   // routes, they verify the `spotix_at` cookie themselves (same convention
   // as every other /api route per the matcher note), and a redirect-to-
@@ -105,7 +106,7 @@ export async function proxy(request: NextRequest) {
     return noStore(NextResponse.next({ request: { headers } }));
   }
 
-  // ── 1. Fully public routes ───────────────────────────────────────────────────
+  //  1. Fully public routes 
   if (PUBLIC_ROUTES.has(pathname)) {
     const token = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
     const payload = await verifyAccessTokenEdge(token, "spotix-booker");
@@ -124,7 +125,7 @@ export async function proxy(request: NextRequest) {
     return noStore(NextResponse.next());
   }
 
-  // ── 2. Verify access token ───────────────────────────────────────────────────
+  //  2. Verify access token 
   const token = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
   const payload = await verifyAccessTokenEdge(token, "spotix-booker");
 
@@ -147,7 +148,7 @@ export async function proxy(request: NextRequest) {
     return noStore(NextResponse.redirect(loginUrl));
   }
 
-  // ── 3. Non-booker routes ─────────────────────────────────────────────────────
+  //  3. Non-booker routes 
   if (NON_BOOKER_ROUTES.has(pathname)) {
     // Bookers don't need to see /not-booker — send them home
     if (payload.isBooker) {
@@ -157,12 +158,12 @@ export async function proxy(request: NextRequest) {
     return noStore(NextResponse.next());
   }
 
-  // ── 4. Protected routes — booker check ──────────────────────────────────────
+  //  4. Protected routes — booker check 
   if (!payload.isBooker) {
     return noStore(NextResponse.redirect(new URL("/not-booker", request.url)));
   }
 
-  // ── 5. Authenticated booker — allow and forward identity headers ─────────────
+  //  5. Authenticated booker — allow and forward identity headers 
   /**
    * Inject verified identity into request headers so API routes and
    * server components can read them without re-verifying the JWT.
@@ -180,7 +181,7 @@ export async function proxy(request: NextRequest) {
   return noStore(NextResponse.next({ request: { headers: requestHeaders } }));
 }
 
-// ── Matcher ────────────────────────────────────────────────────────────────────
+//  Matcher 
 
 export const config = {
   matcher: [
@@ -199,5 +200,6 @@ export const config = {
     "/api/polls/payout/:path*",
     // FIX: elections payout was missing here — this is what caused the 401.
     "/api/elections/:electionId/payout/:path*",
+    "/api/listings/:listingId/payout/:path*",
   ],
 };

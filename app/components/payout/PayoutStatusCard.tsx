@@ -60,8 +60,8 @@ export default function PayoutStatusCard({ reference, onStatusChange }: PayoutSt
     ? live.durationSeconds
     : Math.max(0, Math.floor((Date.now() - new Date(live.createdAt).getTime()) / 1000))
 
-  const label = live.isEvent ? "event" : live.isPoll ? "poll" : "payout"
-  const subjectName = live.isEvent ? live.eventName : live.pollName
+  const label = live.isEvent ? "event" : live.isPoll ? "poll" : live.isElection ? "election" : live.isMerch ? "listing" : "payout"
+  const subjectName = live.isEvent ? live.eventName : live.isPoll ? live.pollName : live.isElection ? live.electionName : live.merchName
 
   function copyReference() {
     navigator.clipboard.writeText(reference).then(() => {

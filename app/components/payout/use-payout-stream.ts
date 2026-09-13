@@ -9,8 +9,12 @@ export interface PayoutLiveState {
   status: PayoutLiveStatus
   isEvent: boolean
   isPoll: boolean
+  isElection: boolean
+  isMerch: boolean
   eventName: string | null
   pollName: string | null
+  electionName: string | null
+  merchName: string | null
   payDate: string
   amount: number
   narration: string | null
@@ -44,8 +48,12 @@ export function usePayoutStream(reference: string, onStatusChange?: (state: Payo
     status: "initializing",
     isEvent: false,
     isPoll: false,
+    isElection: false,
+    isMerch: false,
     eventName: null,
     pollName: null,
+    electionName: null,
+    merchName: null,
     payDate: "",
     amount: 0,
     narration: null,

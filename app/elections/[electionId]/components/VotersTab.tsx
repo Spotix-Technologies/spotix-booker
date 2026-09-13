@@ -21,9 +21,10 @@
  */
 
 import { useEffect, useMemo, useState } from "react"
-import { UploadCloud, FileDown, Plus, Trash2, Users2, Check, Search } from "lucide-react"
+import { UploadCloud, FileDown, Plus, Trash2, Users2, Check, Search, Pencil, X, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "../../components/Skeleton"
+import { AllowVoterPrefillCard } from "./AllowVoterPrefillCard"
 
 interface FieldSpec {
   key: string
@@ -56,7 +57,15 @@ function postWithProgress(url: string, body: unknown, onProgress: (pct: number) 
   })
 }
 
-export function VotersTab({ electionId }: { electionId: string }) {
+export function VotersTab({
+  electionId,
+  election,
+  onChanged,
+}: {
+  electionId: string
+  election: any
+  onChanged: () => void
+}) {
   const [fields, setFields] = useState<FieldSpec[] | null>(null)
   const [loadingFields, setLoadingFields] = useState(true)
   const [voters, setVoters] = useState<any[]>([])
@@ -96,7 +105,12 @@ export function VotersTab({ electionId }: { electionId: string }) {
   }
 
   if (fields === null) {
-    return <FieldSpecSetup electionId={electionId} onSaved={loadFields} />
+    return (
+      <div>
+        <AllowVoterPrefillCard electionId={electionId} allowVoterPrefill={election?.allow_voter_prefill ?? false} onChanged={onChanged} />
+        <FieldSpecSetup electionId={electionId} onSaved={loadFields} />
+      </div>
+    )
   }
 
   async function handleCsvUpload(file: File) {
@@ -161,10 +175,12 @@ export function VotersTab({ electionId }: { electionId: string }) {
 
   return (
     <div>
+      <AllowVoterPrefillCard electionId={electionId} allowVoterPrefill={election?.allow_voter_prefill ?? false} onChanged={onChanged} />
+
       <div className="rounded-2xl border border-gray-200 p-4">
         <p className="text-sm font-medium text-gray-700">Required fields for this election's voter list</p>
         <p className="mt-1 text-xs text-gray-500">
-          email, name{fields.length > 0 && `, ${fields.map((f) => f.key).join(", ")}`} — every voter, whether uploaded or typed in, must
+          email, name{fields.length > 0 && `, ${fields.map((f) => f.key).join(", ")}`}. Every voter, whether uploaded or typed in, must
           include these.
         </p>
       </div>
@@ -259,7 +275,7 @@ export function VotersTab({ electionId }: { electionId: string }) {
         />
       )}
 
-      <VoterListSection voters={voters} fields={fields} />
+      <VoterListSection voters={voters} fields={fields} electionId={electionId} onReload={loadVoters} />
     </div>
   )
 }
@@ -276,9 +292,42 @@ const VOTERS_PAGE_SIZE = 20
  * every voter, not just the current page, and resets back to page 1
  * whenever the query changes.
  */
-function VoterListSection({ voters, fields }: { voters: any[]; fields: FieldSpec[] }) {
+interface VoterEditDraft {
+  email: string
+  name: string
+  phone: string
+  meta: Record<string, string>
+}
+
+/**
+ * Search + paginated table for the uploaded voter list, plus inline
+ * per-row edit and delete — organisers can fix a typo'd email or drop
+ * a voter without leaving this tab. Edit swaps the row's cells for
+ * inputs in place (no modal); Save PATCHes just that voter and Cancel
+ * discards the draft. Delete asks for confirmation, then DELETEs.
+ * Both actions re-fetch the full list via `onReload` afterward rather
+ * than patching local state, so this table and the "N voter(s)
+ * uploaded" count above it never drift from the server.
+ */
+function VoterListSection({
+  voters,
+  fields,
+  electionId,
+  onReload,
+}: {
+  voters: any[]
+  fields: FieldSpec[]
+  electionId: string
+  onReload: () => void
+}) {
   const [query, setQuery] = useState("")
   const [page, setPage] = useState(1)
+
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState<VoterEditDraft | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editErrors, setEditErrors] = useState<string[] | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -299,6 +348,66 @@ function VoterListSection({ voters, fields }: { voters: any[]; fields: FieldSpec
   const totalPages = Math.max(1, Math.ceil(filtered.length / VOTERS_PAGE_SIZE))
   const currentPage = Math.min(page, totalPages)
   const pageItems = filtered.slice((currentPage - 1) * VOTERS_PAGE_SIZE, currentPage * VOTERS_PAGE_SIZE)
+
+  function startEdit(v: any) {
+    setEditingId(v.id)
+    setEditDraft({ email: v.email, name: v.name, phone: v.phone ?? "", meta: { ...(v.meta ?? {}) } })
+    setEditErrors(null)
+  }
+  function cancelEdit() {
+    setEditingId(null)
+    setEditDraft(null)
+    setEditErrors(null)
+  }
+
+  async function saveEdit(voterId: string) {
+    if (!editDraft) return
+    setEditErrors(null)
+
+    const clientErrors: string[] = []
+    if (!editDraft.email.trim()) clientErrors.push("Email is required")
+    if (!editDraft.name.trim()) clientErrors.push("Name is required")
+    fields.forEach((f) => {
+      if (f.required && !editDraft.meta[f.key]?.trim()) clientErrors.push(`"${f.label}" is required`)
+    })
+    if (clientErrors.length > 0) {
+      setEditErrors(clientErrors)
+      return
+    }
+
+    setSavingEdit(true)
+    try {
+      const res = await fetch(`/api/elections/${electionId}/voters/${voterId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editDraft),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.details?.join(", ") ?? data.error ?? "Failed to save voter")
+      cancelEdit()
+      onReload()
+    } catch (err: any) {
+      setEditErrors([err.message ?? "Failed to save voter"])
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  async function handleDelete(v: any) {
+    if (!window.confirm(`Remove ${v.name || v.email} from this election's voter list? This can't be undone.`)) return
+    setDeletingId(v.id)
+    try {
+      const res = await fetch(`/api/elections/${electionId}/voters/${v.id}`, { method: "DELETE" })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error ?? "Failed to remove voter")
+      if (editingId === v.id) cancelEdit()
+      onReload()
+    } catch (err: any) {
+      window.alert(err.message ?? "Failed to remove voter")
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <div className="mt-6">
@@ -323,7 +432,7 @@ function VoterListSection({ voters, fields }: { voters: any[]; fields: FieldSpec
       ) : (
         <>
           <div className="mt-3 overflow-x-auto rounded-xl border border-gray-200">
-            <table className="w-full min-w-[480px] text-left text-sm">
+            <table className="w-full min-w-[560px] text-left text-sm">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                   <th className="px-4 py-2.5">Name</th>
@@ -334,21 +443,111 @@ function VoterListSection({ voters, fields }: { voters: any[]; fields: FieldSpec
                       {f.label || f.key}
                     </th>
                   ))}
+                  <th className="px-4 py-2.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {pageItems.map((v) => (
-                  <tr key={v.id}>
-                    <td className="px-4 py-2.5 font-medium text-gray-900">{v.name}</td>
-                    <td className="px-4 py-2.5 text-gray-600">{v.email}</td>
-                    <td className="px-4 py-2.5 text-gray-600">{v.phone || "—"}</td>
-                    {fields.map((f) => (
-                      <td key={f.key} className="px-4 py-2.5 text-gray-600">
-                        {v.meta?.[f.key] || "—"}
+                {pageItems.map((v) => {
+                  const isEditing = editingId === v.id
+                  const isDeleting = deletingId === v.id
+
+                  if (isEditing && editDraft) {
+                    return (
+                      <tr key={v.id} className="bg-gray-50/60">
+                        <td className="px-4 py-2 align-top">
+                          <input
+                            value={editDraft.name}
+                            onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })}
+                            className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm outline-none focus:border-[#6b2fa5]"
+                          />
+                        </td>
+                        <td className="px-4 py-2 align-top">
+                          <input
+                            value={editDraft.email}
+                            onChange={(e) => setEditDraft({ ...editDraft, email: e.target.value })}
+                            className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm outline-none focus:border-[#6b2fa5]"
+                          />
+                        </td>
+                        <td className="px-4 py-2 align-top">
+                          <input
+                            value={editDraft.phone}
+                            onChange={(e) => setEditDraft({ ...editDraft, phone: e.target.value })}
+                            className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm outline-none focus:border-[#6b2fa5]"
+                          />
+                        </td>
+                        {fields.map((f) => (
+                          <td key={f.key} className="px-4 py-2 align-top">
+                            <input
+                              value={editDraft.meta[f.key] ?? ""}
+                              onChange={(e) => setEditDraft({ ...editDraft, meta: { ...editDraft.meta, [f.key]: e.target.value } })}
+                              placeholder={f.required ? `${f.label} *` : f.label}
+                              className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm outline-none focus:border-[#6b2fa5]"
+                            />
+                          </td>
+                        ))}
+                        <td className="px-4 py-2 align-top">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => saveEdit(v.id)}
+                              disabled={savingEdit}
+                              title="Save"
+                              className="rounded-lg p-1.5 text-green-600 hover:bg-green-50 disabled:opacity-50"
+                            >
+                              {savingEdit ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                            </button>
+                            <button
+                              onClick={cancelEdit}
+                              disabled={savingEdit}
+                              title="Cancel"
+                              className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 disabled:opacity-50"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                          {editErrors && (
+                            <ul className="mt-1 list-disc pl-4 text-xs text-red-600">
+                              {editErrors.map((e, i) => (
+                                <li key={i}>{e}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  }
+
+                  return (
+                    <tr key={v.id}>
+                      <td className="px-4 py-2.5 font-medium text-gray-900">{v.name}</td>
+                      <td className="px-4 py-2.5 text-gray-600">{v.email}</td>
+                      <td className="px-4 py-2.5 text-gray-600">{v.phone || "—"}</td>
+                      {fields.map((f) => (
+                        <td key={f.key} className="px-4 py-2.5 text-gray-600">
+                          {v.meta?.[f.key] || "—"}
+                        </td>
+                      ))}
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => startEdit(v)}
+                            title="Edit voter"
+                            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-[#6b2fa5]"
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(v)}
+                            disabled={isDeleting}
+                            title="Remove voter"
+                            className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                          >
+                            {isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                          </button>
+                        </div>
                       </td>
-                    ))}
-                  </tr>
-                ))}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

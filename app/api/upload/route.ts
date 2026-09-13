@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
   let file: File
   if (raw instanceof File) {
     file = raw
-  } else if (typeof globalThis.Blob !== "undefined" && raw instanceof globalThis.Blob) {
+  } else if (typeof globalThis.Blob !== "undefined" && (raw as any) instanceof globalThis.Blob) {
     const mime = raw.type || "image/jpeg"
     const ext  = mime.split("/")[1]?.split("+")[0] ?? "jpg"
     file = new File([raw], `upload.${ext}`, { type: mime })

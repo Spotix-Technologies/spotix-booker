@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { Trash2, Edit2, Package, Power } from "lucide-react"
+import { Trash2, Edit2, Package, Power, Wallet } from "lucide-react"
 import { deleteListing } from "@/lib/listing-utils"
 import { authFetch } from "@/lib/auth-client"
 import { EditListingModal } from "./edit-listing-modal"
@@ -124,6 +124,13 @@ export function ListingListRow({ listing, userId, onUpdate }: ListingListRowProp
               <Package size={16} />
             </button>
             <button
+              onClick={() => router.push(`/listings/manage/${listing.id}/payouts`)}
+              title="Payouts"
+              className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#6b2fa5] hover:bg-[#5a2589] text-white transition-colors duration-200"
+            >
+              <Wallet size={16} />
+            </button>
+            <button
               onClick={() => setEditOpen(true)}
               title="Edit"
               className="w-9 h-9 flex items-center justify-center rounded-lg border-2 border-[#6b2fa5] text-[#6b2fa5] hover:bg-[#6b2fa5] hover:text-white transition-colors duration-200"
@@ -147,6 +154,12 @@ export function ListingListRow({ listing, userId, onUpdate }: ListingListRowProp
             className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg bg-[#6b2fa5] text-white text-xs font-semibold"
           >
             <Package size={14} /> Orders
+          </button>
+          <button
+            onClick={() => router.push(`/listings/manage/${listing.id}/payouts`)}
+            className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg bg-[#6b2fa5] text-white text-xs font-semibold"
+          >
+            <Wallet size={14} /> Payouts
           </button>
           <button
             onClick={() => setEditOpen(true)}

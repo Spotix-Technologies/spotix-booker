@@ -29,12 +29,15 @@ export interface CreatePayoutRowInput {
   isEvent: boolean
   isPoll: boolean
   isElection?: boolean
+  isMerch?: boolean
   eventId?: string | null
   pollId?: string | null
   electionId?: string | null
+  merchId?: string | null
   eventName?: string | null
   pollName?: string | null
   electionName?: string | null
+  merchName?: string | null
   payDate: string
   userId: string
   amount: number
@@ -48,12 +51,15 @@ export interface PayoutRow {
   is_event: boolean
   is_poll: boolean
   is_election: boolean
+  is_merch: boolean
   event_id: string | null
   poll_id: string | null
   election_id: string | null
+  merch_id: string | null
   event_name: string | null
   poll_name: string | null
   election_name: string | null
+  merch_name: string | null
   pay_date: string
   user_id: string
   amount: number
@@ -88,9 +94,11 @@ export async function createInitializingPayout(input: CreatePayoutRowInput): Pro
     isEvent: input.isEvent,
     isPoll: input.isPoll,
     isElection: input.isElection ?? false,
+    isMerch: input.isMerch ?? false,
     eventName: input.eventName,
     pollName: input.pollName,
     electionName: input.electionName,
+    merchName: input.merchName,
     payDate: input.payDate,
   })
 
@@ -101,12 +109,15 @@ export async function createInitializingPayout(input: CreatePayoutRowInput): Pro
       is_event: input.isEvent,
       is_poll: input.isPoll,
       is_election: input.isElection ?? false,
+      is_merch: input.isMerch ?? false,
       event_id: input.eventId ?? null,
       poll_id: input.pollId ?? null,
       election_id: input.electionId ?? null,
+      merch_id: input.merchId ?? null,
       event_name: input.eventName ?? null,
       poll_name: input.pollName ?? null,
       election_name: input.electionName ?? null,
+      merch_name: input.merchName ?? null,
       pay_date: input.payDate,
       user_id: input.userId,
       amount: input.amount,
@@ -162,6 +173,16 @@ export async function getPayoutsForElection(electionId: string): Promise<PayoutR
   return (data ?? []) as PayoutRow[]
 }
 
+export async function getPayoutsForMerch(merchId: string): Promise<PayoutRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from("payouts")
+    .select("*")
+    .eq("merch_id", merchId)
+    .order("created_at", { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as PayoutRow[]
+}
+
 export async function getPayoutByReference(reference: string): Promise<PayoutRow | null> {
   const { data, error } = await supabaseAdmin
     .from("payouts")
@@ -181,13 +202,14 @@ export async function getPayoutByReference(reference: string): Promise<PayoutRow
  * poisoned).
  */
 export async function hasActiveOrSuccessfulPayout(
-  scope: { eventId?: string; pollId?: string; electionId?: string },
+  scope: { eventId?: string; pollId?: string; electionId?: string; merchId?: string },
   payDate: string
 ): Promise<boolean> {
   let query = supabaseAdmin.from("payouts").select("id, status").eq("pay_date", payDate)
   if (scope.eventId) query = query.eq("event_id", scope.eventId)
   else if (scope.pollId) query = query.eq("poll_id", scope.pollId)
-  else query = query.eq("election_id", scope.electionId!)
+  else if (scope.electionId) query = query.eq("election_id", scope.electionId)
+  else query = query.eq("merch_id", scope.merchId!)
 
   const { data, error } = await query
   if (error) throw new Error(error.message)
