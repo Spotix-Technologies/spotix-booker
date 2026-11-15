@@ -13,7 +13,9 @@ import {
   Pencil,
 } from "lucide-react"
 
-export type SlugStatus = "idle" | "checking" | "available" | "taken" | "invalid"
+/** "pending" = valid slug, waiting out the 5s typing pause before the
+ *  server is asked; "checking" = request actually in flight. */
+export type SlugStatus = "idle" | "pending" | "checking" | "available" | "taken" | "invalid"
 
 interface EventBioDataProps {
   eventName: string
@@ -27,6 +29,8 @@ interface EventBioDataProps {
   eventSlug?: string
   onEventSlugChange?: (value: string) => void
   slugStatus?: SlugStatus
+  /** Skip the typing pause and check the current slug immediately. */
+  onCheckSlugNow?: () => void
   /** e.g. "https://spotix.com" — from NEXT_PUBLIC_SPOTIX_USER. Shown as the
    *  read-only prefix in front of the editable slug segment. */
   spotixUserBase?: string
@@ -69,6 +73,7 @@ export function EventBioData({
   eventSlug = "",
   onEventSlugChange,
   slugStatus = "idle",
+  onCheckSlugNow,
   spotixUserBase = "",
   eventImages,
   setEventImages,
@@ -195,8 +200,18 @@ export function EventBioData({
               <p className={`text-xs mt-1.5 ${slugStatus === "taken" || slugStatus === "invalid" ? "text-red-600" : "text-slate-500"}`}>
                 {slugStatus === "taken" && "That link is already taken — try something else."}
                 {slugStatus === "invalid" && "3–60 characters, lowercase letters, numbers, and hyphens only."}
-                {(slugStatus === "idle" || slugStatus === "checking" || slugStatus === "available") &&
-                  "This is what you will share to people."}
+                {slugStatus === "pending" && "We'll check if it's available once you stop typing. "}
+                {slugStatus === "checking" && "Checking availability… "}
+                {(slugStatus === "idle" || slugStatus === "available") && "This is what you will share to people."}
+                {slugStatus === "pending" && onCheckSlugNow && (
+                  <button
+                    type="button"
+                    onClick={onCheckSlugNow}
+                    className="font-semibold text-[#6b2fa5] hover:underline"
+                  >
+                    Check now
+                  </button>
+                )}
               </p>
             </div>
           )}

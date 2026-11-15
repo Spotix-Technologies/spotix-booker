@@ -239,6 +239,11 @@ export async function buildEventBundle(
             coversSpotixFee: ev.feeBurden.coversSpotixFee === true,
           }
         : { coversPaystackFee: false, coversSpotixFee: ev.buyerBearsBurden === false },
+    // Admin-only toggle (spotix-admin's event-data-tab.tsx -> "toggleQueue"
+    // action) — booker only reads it here, never writes it. Surfaced via
+    // components/event-info/virtual-queue-notice.tsx on the Overview tab.
+    virtualQueueEnabled: ev.virtualQueueEnabled ?? false,
+    queueBatchSize: ev.queueBatchSize ?? 50,
   }
 
   // ── "Ticket Sales Over Time" chart — reads the admin/events/{eventId}

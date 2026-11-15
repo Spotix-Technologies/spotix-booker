@@ -24,7 +24,8 @@
  */
 
 import { useState } from "react"
-import { ShieldCheck, KeyRound, Loader2, AlertCircle, X, Users, KeySquare } from "lucide-react"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
+import { ShieldCheck, KeyRound, Loader2, AlertCircle, Users, KeySquare } from "lucide-react"
 
 interface VaultKeyEnterOnPayoutDialogProps {
   /** Firestore vaultHolds/{id} document IDs — one per date on this request. */
@@ -47,16 +48,8 @@ export default function VaultKeyEnterOnPayoutDialog({
   const [useOtta, setUseOtta] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [closing, setClosing] = useState(false)
 
   const dayLabel = dates.length === 1 ? dates[0] : `${dates.length} days (${dates.join(", ")})`
-
-  // Slide back down before actually unmounting, so "later" doesn't feel abrupt.
-  function handleDismiss() {
-    if (submitting) return
-    setClosing(true)
-    setTimeout(onClose, 200)
-  }
 
   async function handleSubmit() {
     if (!key) return
@@ -84,38 +77,39 @@ export default function VaultKeyEnterOnPayoutDialog({
   }
 
   return (
-    <div
-      className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end justify-center transition-opacity duration-200 ${
-        closing ? "opacity-0" : "opacity-100 animate-in fade-in"
-      }`}
-      onClick={(e) => { if (e.target === e.currentTarget) handleDismiss() }}
-    >
-      <div
-        className={`w-full max-w-md bg-white rounded-t-3xl shadow-2xl px-5 pt-3 pb-6 sm:pb-6 space-y-4 ${
-          closing
-            ? "animate-out slide-out-to-bottom duration-200"
-            : "animate-in slide-in-from-bottom duration-300"
-        }`}
-        style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Drag handle */}
-        <div className="flex justify-center">
-          <div className="w-10 h-1.5 rounded-full bg-gray-200" />
+    <ResponsiveSheet
+      open
+      onClose={onClose}
+      dismissible={!submitting}
+      size="md"
+      zIndex={70}
+      title="Payout request sent"
+      icon={
+        <div className="p-2 bg-purple-100 rounded-lg">
+          <ShieldCheck size={16} className="text-[#6b2fa5]" />
         </div>
-
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <ShieldCheck size={16} className="text-[#6b2fa5]" />
-            </div>
-            <h3 className="text-base font-bold text-gray-900">Payout request sent</h3>
-          </div>
-          <button onClick={handleDismiss} disabled={submitting} className="text-gray-400 hover:text-gray-700 flex-shrink-0">
-            <X size={18} />
+      }
+      footer={
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            I&apos;ll do it later
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || !key}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[#6b2fa5] text-white hover:bg-[#5a2589] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {submitting ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={14} />}
+            {submitting ? "Verifying..." : "Submit Key"}
           </button>
         </div>
-
+      }
+    >
+      <div className="space-y-4">
         <p className="text-sm text-gray-600 leading-relaxed">
           Your payout request for{" "}
           <span className="font-semibold text-gray-900">{dayLabel}</span> (₦
@@ -152,7 +146,7 @@ export default function VaultKeyEnterOnPayoutDialog({
           onChange={(e) => setKey(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && key) handleSubmit() }}
           disabled={submitting}
-          className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] disabled:opacity-50"
+          className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#6b2fa5] disabled:opacity-50"
         />
         {useOtta && (
           <p className="text-xs text-gray-400 -mt-2">
@@ -167,28 +161,10 @@ export default function VaultKeyEnterOnPayoutDialog({
           </div>
         )}
 
-        <div className="flex gap-3">
-          <button
-            onClick={handleDismiss}
-            disabled={submitting}
-            className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            I&apos;ll do it later
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || !key}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[#6b2fa5] text-white hover:bg-[#5a2589] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {submitting ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={14} />}
-            {submitting ? "Verifying..." : "Submit Key"}
-          </button>
-        </div>
-
         <p className="text-xs text-gray-400 text-center">
           You can also do this later from the Vault sign-off section at the top of this page.
         </p>
       </div>
-    </div>
+    </ResponsiveSheet>
   )
 }

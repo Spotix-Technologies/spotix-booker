@@ -16,6 +16,7 @@ export const ALL_TABS = [
   "overview", "eventlink", "payouts", "attendees", "checkin",
   "discounts", "merch", "referrals", "form", "responses",
   "weather", "transfer", "edit", "teams", "agentRequests", "apiAccess",
+  "observability",
 ] as const
 
 export type TabId = typeof ALL_TABS[number]
@@ -34,7 +35,7 @@ export const BUILT_IN_ROLE_TABS: Record<string, TabId[]> = {
   admin: [
     "overview", "eventlink", "payouts", "attendees", "checkin", "discounts", "merch",
     "referrals", "form", "responses", "weather", "transfer", "edit",
-    "teams", "agentRequests", "apiAccess",
+    "teams", "agentRequests", "apiAccess", "observability",
   ],
   checkin:    ["attendees", "checkin", "eventlink", "weather", "form", "responses"],
   accountant: ["overview", "eventlink", "payouts", "discounts", "merch"],
@@ -58,6 +59,7 @@ export const PERMISSION_TO_TAB: Record<string, TabId> = {
   share:     "eventlink",
   transfer:  "transfer",
   apiAccess: "apiAccess",
+  observability: "observability",
 }
 
 export type CollabRoleKind = "owner" | "admin" | "checkin" | "accountant" | "custom"

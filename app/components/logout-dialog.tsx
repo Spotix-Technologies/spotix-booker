@@ -3,8 +3,8 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { ResponsiveSheet } from "@/components/ui/responsive-sheet"
 import {
-  X,
   LogOut,
   Monitor,
   Smartphone,
@@ -173,45 +173,38 @@ export function LogoutDialog({ isOpen, onClose, onLogoutComplete }: LogoutDialog
     }
   }
 
-  if (!isOpen) return null
-
   const currentSession = sessions.find((s) => s.isCurrent)
   const otherSessions = sessions.filter((s) => !s.isCurrent)
   const anyGlobalLoading = isLoggingOutThis || isLoggingOutAll
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
-        onClick={onClose}
-      />
-
-      {/* Dialog */}
-      <div className="relative bg-white rounded-2xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 fade-in duration-300 flex flex-col max-h-[90vh]">
-
-        {/* ── Header ── */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-5 border-b border-slate-100 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-red-50">
-              <LogOut className="w-5 h-5 text-red-500" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 leading-tight">Sign Out</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Manage your active sessions</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={anyGlobalLoading}
-            className="p-2 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-40"
-          >
-            <X className="w-4 h-4 text-slate-500" />
-          </button>
+    <ResponsiveSheet
+      open={isOpen}
+      onClose={onClose}
+      title="Sign Out"
+      description="Manage your active sessions"
+      icon={
+        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-red-50">
+          <LogOut className="w-5 h-5 text-red-500" />
         </div>
-
+      }
+      size="md"
+      zIndex={100}
+      dismissible={!anyGlobalLoading}
+      bodyClassName="px-5 py-4"
+      footer={
+        <button
+          onClick={onClose}
+          disabled={anyGlobalLoading}
+          className="w-full py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-40"
+        >
+          Cancel
+        </button>
+      }
+    >
+      <div>
         {/* ── Primary actions ── */}
-        <div className="px-6 py-5 border-b border-slate-100 flex-shrink-0 space-y-3">
+        <div className="pb-5 border-b border-slate-100 space-y-3">
           {/* Log out this device */}
           <button
             onClick={handleLogoutThis}
@@ -264,8 +257,8 @@ export function LogoutDialog({ isOpen, onClose, onLogoutComplete }: LogoutDialog
         </div>
 
         {/* ── Session list ── */}
-        <div className="flex-1 overflow-y-auto min-h-0">
-          <div className="px-6 py-4">
+        <div>
+          <div className="pt-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Active Sessions
@@ -327,19 +320,8 @@ export function LogoutDialog({ isOpen, onClose, onLogoutComplete }: LogoutDialog
             )}
           </div>
         </div>
-
-        {/* ── Footer ── */}
-        <div className="px-6 py-4 border-t border-slate-100 flex-shrink-0">
-          <button
-            onClick={onClose}
-            disabled={anyGlobalLoading}
-            className="w-full py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-40"
-          >
-            Cancel
-          </button>
-        </div>
       </div>
-    </div>
+    </ResponsiveSheet>
   )
 }
 

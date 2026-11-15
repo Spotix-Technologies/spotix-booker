@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { X, Loader2, ChevronLeft, CheckSquare, Square, Trophy, Layers, Users } from "lucide-react"
+import { Loader2, ChevronLeft, CheckSquare, Square, Trophy, Layers, Users } from "lucide-react"
+import { ResponsiveSheet } from "@/components/ui/responsive-sheet"
 import { dicebearAvatarUrl } from "@/lib/dicebear"
 import { genContestantId, genCategoryId, type CategoryForm, type ContestantForm } from "../lib/factories"
 
@@ -136,136 +137,27 @@ export function ImportNomineesCategoryDialog({ onClose, onImport, defaultPollPri
   const selectedCount = selectedCategoryIds.size
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center gap-3 p-4 sm:p-5 border-b border-slate-200">
-          {step === "categories" && (
-            <button onClick={() => setStep("polls")} className="p-1 text-slate-400 hover:text-slate-700">
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-          )}
-          <h3
-            className="font-bold text-slate-900 flex-1 min-w-0 truncate"
-            title={step === "categories" ? selectedPoll?.pollName : undefined}
-          >
-            {step === "polls" ? "Import Categories from Nominees" : selectedPoll?.pollName}
-          </h3>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-700">
-            <X className="w-5 h-5" />
+    <ResponsiveSheet
+      open
+      onClose={onClose}
+      title={<span className="block truncate" title={step === "categories" ? selectedPoll?.pollName : undefined}>{step === "polls" ? "Import Categories from Nominees" : selectedPoll?.pollName}</span>}
+      description={
+        step === "polls"
+          ? "Import whole categories straight from a nomination poll — each category comes in with its nominees already loaded as contestants."
+          : undefined
+      }
+      icon={
+        step === "categories" ? (
+          <button onClick={() => setStep("polls")} aria-label="Back" className="grid h-8 w-8 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+            <ChevronLeft className="w-5 h-5" />
           </button>
-        </div>
-
-        {step === "polls" && (
-          <p className="px-4 sm:px-5 pt-3 text-xs text-slate-500">
-            Import whole categories straight from a nomination poll — each category comes in
-            with its nominees already loaded as contestants.
-          </p>
-        )}
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5">
-          {loading ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#6b2fa5]" /></div>
-          ) : error ? (
-            <p className="text-center text-red-600 text-sm py-8">{error}</p>
-          ) : step === "polls" ? (
-            polls.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-slate-500 text-sm">You haven't created any nomination polls yet.</p>
-                <a href="/polls/create/nomination" className="text-[#6b2fa5] text-sm font-medium mt-2 inline-block">
-                  Create one →
-                </a>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {polls.map((p) => (
-                  <button
-                    key={p.pollId}
-                    onClick={() => openPoll(p)}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-[#6b2fa5] transition-colors text-left"
-                  >
-                    <img src={p.pollImage || "/placeholder.svg"} alt="" className="w-12 h-12 rounded-lg object-cover bg-slate-100 flex-shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-slate-900 truncate">{p.pollName}</p>
-                      <p className="text-xs text-slate-500">{p.categories.length} categor{p.categories.length === 1 ? "y" : "ies"}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )
-          ) : (
-            <div>
-              {/* Select all / clear */}
-              <div className="flex items-center gap-2 mb-3">
-                <p className="text-xs text-slate-500 flex-1 flex items-center gap-1">
-                  <Layers className="w-3.5 h-3.5" /> {selectedPoll?.categories.length ?? 0} categor{(selectedPoll?.categories.length ?? 0) === 1 ? "y" : "ies"} available
-                </p>
-                <button onClick={selectAll} className="text-xs font-medium text-[#6b2fa5] px-2 py-1 hover:bg-[#6b2fa5]/5 rounded-lg whitespace-nowrap">
-                  Select all
-                </button>
-                <button onClick={clearAll} className="text-xs font-medium text-slate-500 px-2 py-1 hover:bg-slate-100 rounded-lg whitespace-nowrap">
-                  Clear
-                </button>
-              </div>
-
-              {nominationThreshold != null && (
-                <label className="flex items-center gap-2 mb-3 cursor-pointer select-none w-fit">
-                  <input
-                    type="checkbox"
-                    checked={qualifiedOnly}
-                    onChange={(e) => setQualifiedOnly(e.target.checked)}
-                    className="w-3.5 h-3.5 accent-[#6b2fa5]"
-                  />
-                  <span className="flex items-center gap-1 text-xs font-medium text-slate-600">
-                    <Trophy className="w-3.5 h-3.5 text-amber-500" />
-                    Only import qualified nominees ({nominationThreshold}+ nominations)
-                  </span>
-                </label>
-              )}
-
-              {/* Category list */}
-              {nomineesLoading ? (
-                <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-[#6b2fa5]" /></div>
-              ) : (
-                <div className="space-y-2">
-                  {selectedPoll?.categories.map((c) => {
-                    const isSelected = selectedCategoryIds.has(c.categoryId)
-                    const count = nomineesFor(c.categoryId).length
-                    return (
-                      <button
-                        key={c.categoryId}
-                        onClick={() => toggleCategory(c.categoryId)}
-                        className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-colors text-left
-                          ${isSelected ? "border-[#6b2fa5] bg-[#6b2fa5]/5" : "border-slate-200 hover:border-slate-300"}`}
-                      >
-                        {isSelected ? (
-                          <CheckSquare className="w-4.5 h-4.5 text-[#6b2fa5] flex-shrink-0" />
-                        ) : (
-                          <Square className="w-4.5 h-4.5 text-slate-300 flex-shrink-0" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-slate-900 truncate">{c.name}</p>
-                          <p className="text-xs text-slate-500 flex items-center gap-1">
-                            <Users className="w-3 h-3" />
-                            {count} nominee{count !== 1 ? "s" : ""}
-                            {count < 2 && (
-                              <span className="text-amber-600 font-medium">· needs at least 2 to be votable</span>
-                            )}
-                          </p>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        {step === "categories" && (
-          <div className="p-4 sm:p-5 border-t border-slate-200 flex items-center justify-between">
+        ) : undefined
+      }
+      size="lg"
+      zIndex={70}
+      footer={
+        step === "categories" ? (
+          <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-slate-500">{selectedCount} categor{selectedCount === 1 ? "y" : "ies"} selected</p>
             <button
               onClick={handleImport}
@@ -275,8 +167,105 @@ export function ImportNomineesCategoryDialog({ onClose, onImport, defaultPollPri
               Import Selected
             </button>
           </div>
-        )}
-      </div>
-    </div>
+        ) : undefined
+      }
+    >
+      {loading ? (
+        <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#6b2fa5]" /></div>
+      ) : error ? (
+        <p className="text-center text-red-600 text-sm py-8">{error}</p>
+      ) : step === "polls" ? (
+        polls.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-slate-500 text-sm">You haven't created any nomination polls yet.</p>
+            <a href="/polls/create/nomination" className="text-[#6b2fa5] text-sm font-medium mt-2 inline-block">
+              Create one →
+            </a>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {polls.map((p) => (
+              <button
+                key={p.pollId}
+                onClick={() => openPoll(p)}
+                className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-[#6b2fa5] transition-colors text-left"
+              >
+                <img src={p.pollImage || "/placeholder.svg"} alt="" className="w-12 h-12 rounded-lg object-cover bg-slate-100 flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-slate-900 truncate">{p.pollName}</p>
+                  <p className="text-xs text-slate-500">{p.categories.length} categor{p.categories.length === 1 ? "y" : "ies"}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )
+      ) : (
+        <div>
+          {/* Select all / clear */}
+          <div className="flex items-center gap-2 mb-3">
+            <p className="text-xs text-slate-500 flex-1 flex items-center gap-1">
+              <Layers className="w-3.5 h-3.5" /> {selectedPoll?.categories.length ?? 0} categor{(selectedPoll?.categories.length ?? 0) === 1 ? "y" : "ies"} available
+            </p>
+            <button onClick={selectAll} className="text-xs font-medium text-[#6b2fa5] px-2 py-1 hover:bg-[#6b2fa5]/5 rounded-lg whitespace-nowrap">
+              Select all
+            </button>
+            <button onClick={clearAll} className="text-xs font-medium text-slate-500 px-2 py-1 hover:bg-slate-100 rounded-lg whitespace-nowrap">
+              Clear
+            </button>
+          </div>
+
+          {nominationThreshold != null && (
+            <label className="flex items-center gap-2 mb-3 cursor-pointer select-none w-fit">
+              <input
+                type="checkbox"
+                checked={qualifiedOnly}
+                onChange={(e) => setQualifiedOnly(e.target.checked)}
+                className="w-3.5 h-3.5 accent-[#6b2fa5]"
+              />
+              <span className="flex items-center gap-1 text-xs font-medium text-slate-600">
+                <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                Only import qualified nominees ({nominationThreshold}+ nominations)
+              </span>
+            </label>
+          )}
+
+          {/* Category list */}
+          {nomineesLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-[#6b2fa5]" /></div>
+          ) : (
+            <div className="space-y-2">
+              {selectedPoll?.categories.map((c) => {
+                const isSelected = selectedCategoryIds.has(c.categoryId)
+                const count = nomineesFor(c.categoryId).length
+                return (
+                  <button
+                    key={c.categoryId}
+                    onClick={() => toggleCategory(c.categoryId)}
+                    className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-colors text-left
+                      ${isSelected ? "border-[#6b2fa5] bg-[#6b2fa5]/5" : "border-slate-200 hover:border-slate-300"}`}
+                  >
+                    {isSelected ? (
+                      <CheckSquare className="w-4.5 h-4.5 text-[#6b2fa5] flex-shrink-0" />
+                    ) : (
+                      <Square className="w-4.5 h-4.5 text-slate-300 flex-shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900 truncate">{c.name}</p>
+                      <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {count} nominee{count !== 1 ? "s" : ""}
+                        {count < 2 && (
+                          <span className="text-amber-600 font-medium">· needs at least 2 to be votable</span>
+                        )}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </ResponsiveSheet>
   )
 }

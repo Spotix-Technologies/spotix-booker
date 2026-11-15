@@ -30,6 +30,7 @@ import { adminDb } from "@/lib/firebase-admin"
 import { verifyAccessToken } from "@/lib/auth-tokens"
 import { type NextRequest, NextResponse } from "next/server"
 import { computeSalesTrend, todayAndYesterdayKeys } from "@/lib/sales-trend"
+import { getTimeStatus } from "@/lib/event-time-status"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -214,6 +215,12 @@ export async function GET(request: NextRequest) {
 
     let activeEvents = 0
     let inactiveEvents = 0
+    // Date-based grouping (item 1/2 of the dashboard renovation) — computed
+    // across EVERY event the booker owns, not just the 5 shown in the
+    // Recent Events table. "Today" is bucketed into upcoming (it hasn't
+    // concluded yet) — see lib/event-time-status.ts.
+    let upcomingEvents = 0
+    let pastEvents = 0
     const recentEventsData: any[] = []
     const seriesInput: { eventDate?: string; revenue: number; ticketsSold: number }[] = []
     // Only active events feed the day-over-day trend sum below — inactive/
@@ -228,8 +235,17 @@ export async function GET(request: NextRequest) {
       if (d.status === "active") activeEvents++
       else if (d.status === "inactive") inactiveEvents++
 
+      const timeStatus = getTimeStatus(d.eventDate)
+      if (timeStatus === "past") pastEvents++
+      else upcomingEvents++ // "today" or "upcoming" (or unknown date) counts as upcoming
+
       const revenue = d.totalRevenue || 0
       const ticketsSoldForEvent = d.ticketsSold || 0
+
+      // Moderation tags still apply alongside the date-based badge —
+      // suspended takes precedence over flagged, mirroring
+      // app/api/activity/recent/route.ts's existing convention.
+      const status = d.suspended ? "suspended" : d.flagged ? "flagged" : d.status || "inactive"
 
       recentEventsData.push({
         id: doc.id,
@@ -238,7 +254,9 @@ export async function GET(request: NextRequest) {
         ticketsSold: ticketsSoldForEvent,
         revenue,
         availableBalance: d.availableRevenue ?? revenue - (d.totalPaidOut || 0),
-        status: d.status || "inactive",
+        status,
+        flagged: !!d.flagged,
+        suspended: !!d.suspended,
       })
 
       seriesInput.push({ eventDate: d.eventDate, revenue, ticketsSold: ticketsSoldForEvent })
@@ -303,6 +321,8 @@ export async function GET(request: NextRequest) {
         pollAmount,
         pollCount,
         totalPaidOut: d.totalPaidOut || 0,
+        flagged: !!d.flagged,
+        suspended: !!d.suspended,
       })
     }
 
@@ -326,6 +346,12 @@ export async function GET(request: NextRequest) {
         availableBalance,
         totalPaidOut,
         totalTicketsSold: ticketsSold,
+        // Date-based grouping shown on the redesigned Overview row — see
+        // lib/event-time-status.ts. Kept alongside the original fields
+        // above rather than replacing them, since app/m/dashboard (PWA)
+        // still reads totalEvents/activeEvents/inactiveEvents/totalTicketsSold.
+        upcomingEvents,
+        pastEvents,
       },
       recentEvents,
       timeSeries,

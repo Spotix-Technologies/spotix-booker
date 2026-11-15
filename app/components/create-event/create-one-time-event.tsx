@@ -11,10 +11,10 @@ import { uploadImage } from "@/lib/image-uploader"
 import { authFetch, getAccessToken } from "@/lib/auth-client"
 import { MapPickerModal } from "./map-picker-modal"
 import type { TicketType } from "@/types/ticket"
-import { slugify, slugifyLive, isValidSlug } from "@/lib/slug"
+import { slugify, slugifyLive } from "@/lib/slug"
+import { useSlugAvailability } from "@/hooks/useSlugAvailability"
 import { useEventDraft } from "@/hooks/useEventDraft"
 import type { FeeBurdenState } from "./helper/BurdenOfFeeCard"
-import type { SlugStatus } from "./helper/EventBioData"
 
 // Import helper components
 import { EventBioData } from "./helper/EventBioData"
@@ -45,15 +45,24 @@ const SPOTIX_USER_BASE = process.env.NEXT_PUBLIC_SPOTIX_USER || ""
  *  while still blending into the page background below it (item 2). */
 function CreateEventBackdrop() {
   return (
-    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 w-screen top-0 h-[420px] -z-10 overflow-hidden">
+    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 w-screen top-0 h-[460px] sm:h-[420px] -z-10 overflow-hidden">
       <Image
         src="/create-event-bg.jpg"
         alt=""
         fill
         priority
-        className="object-cover object-center blur-[2px] scale-105"
+        sizes="100vw"
+        className="object-cover object-center blur-[4px] scale-110"
       />
-      <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/75 to-black/60" />
+      {/* Dark scrim — a plain inline gradient (not a Tailwind gradient
+          utility) so nothing can reinterpret or re-order it. */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(to bottom, rgba(12, 6, 24, 0.82) 0%, rgba(12, 6, 24, 0.7) 55%, rgba(12, 6, 24, 0.55) 100%)",
+        }}
+      />
     </div>
   )
 }
@@ -96,8 +105,9 @@ export function CreateOneTimeEvent({ onSuccess, onBack }: CreateOneTimeEventProp
   // key everywhere else; this is purely the public URL segment.
   const [eventSlug, setEventSlug] = useState("")
   const [slugTouched, setSlugTouched] = useState(false)
-  const [slugStatus, setSlugStatus] = useState<SlugStatus>("idle")
-  const slugCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Availability is only asked of the server 5s after the organizer's LAST
+  // keystroke (see hooks/useSlugAvailability.ts) — not on every character.
+  const { status: slugStatus, checkNow: checkSlugNow } = useSlugAvailability(eventSlug)
 
   const [enabledCollaboration, setEnabledCollaboration] = useState(false)
   const [allowAgents, setAllowAgents] = useState(false)
@@ -145,33 +155,7 @@ export function CreateOneTimeEvent({ onSuccess, onBack }: CreateOneTimeEventProp
     setEventSlug(slugifyLive(value))
   }, [])
 
-  // Debounced live availability check against /api/event/slug-check.
-  useEffect(() => {
-    if (slugCheckTimer.current) clearTimeout(slugCheckTimer.current)
-    if (!eventSlug) {
-      setSlugStatus("idle")
-      return
-    }
-    if (!isValidSlug(eventSlug)) {
-      setSlugStatus("invalid")
-      return
-    }
-    setSlugStatus("checking")
-    slugCheckTimer.current = setTimeout(async () => {
-      try {
-        const res = await authFetch(`/api/event/slug-check?slug=${encodeURIComponent(eventSlug)}`)
-        const json = await res.json()
-        setSlugStatus(json.available ? "available" : "taken")
-      } catch {
-        setSlugStatus("idle")
-      }
-    }, 500)
-    return () => {
-      if (slugCheckTimer.current) clearTimeout(slugCheckTimer.current)
-    }
-  }, [eventSlug])
-
-  // ── Redis draft (item 4) ────────────────────────────────────────────────
+  //  Redis draft (item 4) 
   const buildDraftSnapshot = useCallback(
     () => ({
       eventName, eventDescription, eventDate, eventVenue, eventStart, eventEnd,
@@ -675,6 +659,7 @@ export function CreateOneTimeEvent({ onSuccess, onBack }: CreateOneTimeEventProp
             eventSlug={eventSlug}
             onEventSlugChange={handleEventSlugChange}
             slugStatus={slugStatus}
+            onCheckSlugNow={checkSlugNow}
             spotixUserBase={SPOTIX_USER_BASE}
           />
         )
@@ -752,7 +737,7 @@ export function CreateOneTimeEvent({ onSuccess, onBack }: CreateOneTimeEventProp
     <>
       <Preloader isLoading={loading} />
 
-      <div className="relative w-full px-0 sm:px-4 lg:px-6 xl:px-8 py-12 space-y-8 pb-12">
+      <div className="relative isolate w-full px-0 sm:px-4 lg:px-6 xl:px-8 py-8 sm:py-12 space-y-6 sm:space-y-8 pb-12">
         <CreateEventBackdrop />
 
         {/* Top toolbar — Back (item 2) on the left, Save / Load Draft on the
@@ -798,11 +783,11 @@ export function CreateOneTimeEvent({ onSuccess, onBack }: CreateOneTimeEventProp
 
         {/* Page Header */}
         <div className="text-center space-y-4 animate-in fade-in duration-700">
-          <h1 className="text-5xl font-bold text-white drop-shadow-lg">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white drop-shadow-lg px-4">
             Create One-Time Event
           </h1>
 
-          <p className="text-lg text-slate-100 max-w-2xl mx-auto drop-shadow">
+          <p className="text-sm sm:text-lg text-slate-100 max-w-2xl mx-auto drop-shadow px-4">
             Fill in the details below to create your event. All fields marked with * are required.
           </p>
 

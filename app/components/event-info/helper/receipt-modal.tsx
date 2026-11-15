@@ -15,7 +15,8 @@
  */
 
 import { useEffect, useRef, useState } from "react"
-import { X, Download, Loader2, AlertCircle } from "lucide-react"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
+import { Download, Loader2, AlertCircle } from "lucide-react"
 import { buildReceiptCanvas, type ReceiptData } from "@/lib/receipt-image"
 
 interface ReceiptModalProps {
@@ -73,48 +74,39 @@ export default function ReceiptModal({ data, onClose }: ReceiptModalProps) {
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
+    <ResponsiveSheet
+      open
+      onClose={onClose}
+      size="sm"
+      zIndex={70}
+      title="Payout Receipt"
+      footer={
+        <button
+          onClick={handleDownload}
+          disabled={loading || !!error || downloading}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#6b2fa5] text-white hover:bg-[#5a2589] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {downloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+          Download as Image
+        </button>
+      }
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h3 className="text-sm font-bold text-gray-900">Payout Receipt</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X size={18} />
-          </button>
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 size={22} className="animate-spin text-[#6b2fa5]" />
         </div>
-
-        <div className="p-5 space-y-4">
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 size={22} className="animate-spin text-[#6b2fa5]" />
-            </div>
-          ) : error ? (
-            <div className="flex items-center gap-2 text-sm text-red-600 py-8 justify-center">
-              <AlertCircle size={16} className="flex-shrink-0" />
-              {error}
-            </div>
-          ) : (
-            <img
-              src={previewUrl ?? undefined}
-              alt={`Payout receipt for ${data.reference}`}
-              className="w-full rounded-xl border border-gray-200"
-            />
-          )}
-
-          <button
-            onClick={handleDownload}
-            disabled={loading || !!error || downloading}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#6b2fa5] text-white hover:bg-[#5a2589] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {downloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-            Download as Image
-          </button>
+      ) : error ? (
+        <div className="flex items-center gap-2 text-sm text-red-600 py-8 justify-center">
+          <AlertCircle size={16} className="flex-shrink-0" />
+          {error}
         </div>
-      </div>
-    </div>
+      ) : (
+        <img
+          src={previewUrl ?? undefined}
+          alt={`Payout receipt for ${data.reference}`}
+          className="w-full rounded-xl border border-gray-200"
+        />
+      )}
+    </ResponsiveSheet>
   )
 }

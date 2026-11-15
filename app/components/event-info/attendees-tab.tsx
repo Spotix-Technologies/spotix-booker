@@ -9,6 +9,7 @@ import RegistryDialog from "./helper/registry-dialog"
 import AttendeePostMortemDialog from "./helper/attendee-post-mortem-dialog"
 import AttendeeFilterDialog, { EMPTY_ATTENDEE_FILTERS, type AttendeeFilters } from "./attendee-filter"
 import Que from "./helper/ques"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
 import { dicebearAvatarUrl } from "@/lib/dicebear"
 import { authFetch } from "@/lib/auth-client"
 import { useAuth } from "@/hooks/useAuth"
@@ -60,102 +61,94 @@ function AttendeeDialog({
   const checkedInCount = emailTickets.filter((a) => a.verified).length
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-      onClick={onClose}
+    <ResponsiveSheet
+      open
+      onClose={onClose}
+      size="md"
+      hideHeader
+      ariaLabel={`Tickets for ${attendee.fullName}`}
+      bodyClassName="p-0"
+      footer={
+        <button
+          onClick={onClose}
+          className="w-full py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+        >
+          Close
+        </button>
+      }
     >
-      <div
-        className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="bg-gradient-to-br from-[#6b2fa5] to-[#8b4fc5] p-6 text-white">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 p-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <X size={18} />
-          </button>
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-white/20 overflow-hidden flex-shrink-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={dicebearAvatarUrl(attendee.email)}
-                alt={attendee.fullName}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-lg font-bold truncate">{attendee.fullName}</h3>
-              <p className="text-purple-200 text-sm truncate">{attendee.email}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 mt-4">
-            <div className="flex items-center gap-1.5 bg-white/15 rounded-lg px-3 py-1.5 text-sm font-semibold">
-              <Ticket size={14} />
-              {loading ? "…" : `${emailTickets.length} ticket${emailTickets.length !== 1 ? "s" : ""} purchased`}
-            </div>
-            <div className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold ${
-              checkedInCount > 0 ? "bg-[#6b2fa5]/30 text-white" : "bg-white/10 text-white/70"
-            }`}>
-              <CheckCircle2 size={14} />
-              {loading ? "…" : `${checkedInCount} checked in`}
-            </div>
-          </div>
+    <div className="bg-gradient-to-br from-[#6b2fa5] to-[#8b4fc5] p-5 pr-14 text-white">
+      <div className="flex items-center gap-4">
+        <div className="w-14 h-14 rounded-full bg-white/20 overflow-hidden flex-shrink-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={dicebearAvatarUrl(attendee.email)}
+            alt={attendee.fullName}
+            className="w-full h-full object-cover"
+          />
         </div>
-
-        <div className="p-5 space-y-3 max-h-72 overflow-y-auto">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ticket breakdown</p>
-          {loading ? (
-            <div className="flex items-center justify-center py-10 text-slate-400 gap-2">
-              <Loader2 size={18} className="animate-spin" />
-              <span className="text-sm">Loading tickets…</span>
-            </div>
-          ) : (
-            emailTickets.map((t, i) => (
-              <div
-                key={t.id}
-                className={`flex items-start gap-3 p-3.5 rounded-xl border transition-colors ${
-                  t.verified ? "border-[#6b2fa5]/30 bg-[#6b2fa5]/5" : "border-slate-200 bg-slate-50"
-                }`}
-              >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
-                  t.verified ? "bg-[#6b2fa5]/20 text-[#6b2fa5]" : "bg-slate-200 text-slate-600"
-                }`}>
-                  {i + 1}
-                </div>
-                <div className="flex-1 min-w-0 space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold text-slate-900 truncate">{t.ticketType}</span>
-                    {t.verified ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#6b2fa5] bg-[#6b2fa5]/10 border border-[#6b2fa5]/20 rounded-full px-2 py-0.5 flex-shrink-0">
-                        <CheckCircle2 size={10} /> Checked In
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5 flex-shrink-0">
-                        <XCircle size={10} /> Not Checked In
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-slate-500">
-                    <span className="flex items-center gap-1"><Hash size={10} />{t.ticketReference}</span>
-                    <span className="flex items-center gap-1"><Clock size={10} />{formatFirestoreTimestamp(t.purchaseDate)}</span>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
+        <div className="min-w-0">
+          <h3 className="text-lg font-bold truncate">{attendee.fullName}</h3>
+          <p className="text-purple-200 text-sm truncate">{attendee.email}</p>
         </div>
-
-        <div className="px-5 pb-5">
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-          >
-            Close
-          </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-4">
+        <div className="flex items-center gap-1.5 bg-white/15 rounded-lg px-3 py-1.5 text-sm font-semibold">
+          <Ticket size={14} />
+          {loading ? "…" : `${emailTickets.length} ticket${emailTickets.length !== 1 ? "s" : ""} purchased`}
+        </div>
+        <div className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold ${
+          checkedInCount > 0 ? "bg-[#6b2fa5]/30 text-white" : "bg-white/10 text-white/70"
+        }`}>
+          <CheckCircle2 size={14} />
+          {loading ? "…" : `${checkedInCount} checked in`}
         </div>
       </div>
     </div>
+
+    <div className="p-5 space-y-3">
+      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ticket breakdown</p>
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-slate-400 gap-2">
+          <Loader2 size={18} className="animate-spin" />
+          <span className="text-sm">Loading tickets…</span>
+        </div>
+      ) : (
+        emailTickets.map((t, i) => (
+          <div
+            key={t.id}
+            className={`flex items-start gap-3 p-3.5 rounded-xl border transition-colors ${
+              t.verified ? "border-[#6b2fa5]/30 bg-[#6b2fa5]/5" : "border-slate-200 bg-slate-50"
+            }`}
+          >
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
+              t.verified ? "bg-[#6b2fa5]/20 text-[#6b2fa5]" : "bg-slate-200 text-slate-600"
+            }`}>
+              {i + 1}
+            </div>
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-slate-900 truncate">{t.ticketType}</span>
+                {t.verified ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#6b2fa5] bg-[#6b2fa5]/10 border border-[#6b2fa5]/20 rounded-full px-2 py-0.5 flex-shrink-0">
+                    <CheckCircle2 size={10} /> Checked In
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5 flex-shrink-0">
+                    <XCircle size={10} /> Not Checked In
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                <span className="flex items-center gap-1"><Hash size={10} />{t.ticketReference}</span>
+                <span className="flex items-center gap-1"><Clock size={10} />{formatFirestoreTimestamp(t.purchaseDate)}</span>
+              </div>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+    </ResponsiveSheet>
   )
 }
 
@@ -622,6 +615,16 @@ export default function AttendeesTab({
           {loadError}
         </div>
       )}
+
+      {/* Nudge bookers toward Campaigns — most people don't discover the
+          feature just from the nav link, so a one-line pointer lives
+          right where they're already looking at their attendee list. */}
+      <Que
+        tone="info"
+        message="You can email your attendees directly — create a campaign to reach everyone on this list."
+        href={`/campaign?eventId=${eventId}`}
+        linkLabel="Go to Campaigns"
+      />
 
       {/* Online-registry ques — only once we know the status, and only
           when there IS an online registry for this event */}

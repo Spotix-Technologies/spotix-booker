@@ -136,7 +136,29 @@ export default function ElectionDashboardPage() {
           <Clock size={13} className="text-gray-400" />
           Candidate edit window: {graceDays === 0 ? "no edits allowed" : `${graceDays} day${graceDays === 1 ? "" : "s"} after submitting`}
         </span>
+        <span className="inline-flex items-center gap-1.5">
+          <UserCheck size={13} className="text-gray-400" />
+          {election.registration_starts_at || election.registration_ends_at ? (
+            <>
+              Registration
+              {election.registration_starts_at && <> opens {fmtDate(election.registration_starts_at)}</>}
+              {election.registration_ends_at && <> {election.registration_starts_at ? "· closes" : "closes"} {fmtDate(election.registration_ends_at)}</>}
+            </>
+          ) : (
+            "Registration window: indefinite (closes once voting starts)"
+          )}
+        </span>
       </div>
+
+      {election.suspended && (
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700">
+          <span className="mt-0.5 shrink-0">⚠</span>
+          <p>
+            Spotix has suspended this election{election.suspended_reason ? `: ${election.suspended_reason}` : "."} Candidates and voters
+            can't register or vote, and payouts are on hold until it's lifted. Contact Spotix support if you believe this is a mistake.
+          </p>
+        </div>
+      )}
 
       {/* ── Stat cards ─────────────────────────────────────────────── */}
       <div className="mt-5 grid grid-cols-3 gap-3">

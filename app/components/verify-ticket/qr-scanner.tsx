@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { X } from 'lucide-react'
+import { ResponsiveSheet } from "@/components/ui/responsive-sheet"
 import { Html5Qrcode } from "html5-qrcode"
 import { BrowserMultiFormatReader } from "@zxing/library"
 
@@ -27,13 +27,22 @@ export default function QrScanner({ scannerLibrary, onClose, onDetected }: QrSca
   const startScanning = () => {
     setError("")
 
-    setTimeout(() => {
-      if (scannerLibrary === "zxing") {
-        startZxingScanner()
-      } else {
-        startHtml5QrCodeScanner()
+    // The scanner container lives inside the sheet portal, which mounts a
+    // frame after this component — wait for it to exist (max ~1s).
+    const targetId = scannerLibrary === "zxing" ? "zxing-scanner-video" : "html5qrcode-scanner-div"
+    let tries = 0
+    const waitForTarget = () => {
+      if (document.getElementById(targetId) || tries++ > 60) {
+        if (scannerLibrary === "zxing") {
+          startZxingScanner()
+        } else {
+          startHtml5QrCodeScanner()
+        }
+        return
       }
-    }, 100)
+      requestAnimationFrame(waitForTarget)
+    }
+    setTimeout(waitForTarget, 100)
   }
 
   const startHtml5QrCodeScanner = () => {
@@ -118,29 +127,24 @@ export default function QrScanner({ scannerLibrary, onClose, onDetected }: QrSca
   }
 
   return (
-    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full space-y-6 p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h3 className="text-xl font-bold text-gray-900">Scan Spotix Ticket</h3>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200 group"
-            aria-label="Close scanner"
-          >
-            <X size={24} className="text-gray-600 group-hover:text-gray-900 transition-colors" />
-          </button>
-        </div>
-
+    <ResponsiveSheet
+      open
+      onClose={onClose}
+      size="md"
+      title="Scan Spotix Ticket"
+      fullHeightOnMobile
+      zIndex={70}
+    >
+      <div className="space-y-6">
         {/* Scanner Container */}
         <div className="relative rounded-xl overflow-hidden bg-black shadow-inner">
           {scannerLibrary === "zxing" ? (
             <video
               id="zxing-scanner-video"
-              className="w-full h-80 object-cover"
+              className="w-full h-[50dvh] sm:h-80 object-cover"
             />
           ) : (
-            <div id="html5qrcode-scanner-div" className="w-full h-80" />
+            <div id="html5qrcode-scanner-div" className="w-full h-[50dvh] sm:h-80" />
           )}
 
           {/* Scanner Frame Corners */}
@@ -182,6 +186,6 @@ export default function QrScanner({ scannerLibrary, onClose, onDetected }: QrSca
           </div>
         )}
       </div>
-    </div>
+    </ResponsiveSheet>
   )
 }

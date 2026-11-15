@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
 import {
   Lock, ShieldCheck, ShieldAlert, Loader2, AlertCircle, Check,
   UserPlus, KeyRound, X, ChevronRight, Crown, Shield,
@@ -66,34 +67,21 @@ function EnableVaultDialog({
   submitting: boolean
 }) {
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={(e) => { if (e.target === e.currentTarget && !submitting) onCancel() }}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
-        <div className="flex justify-center">
-          <div className="w-14 h-14 bg-purple-100 rounded-full flex items-center justify-center">
-            <Lock size={26} className="text-[#6b2fa5]" />
-          </div>
+    <ResponsiveSheet
+      open
+      onClose={onCancel}
+      dismissible={!submitting}
+      role="alertdialog"
+      size="md"
+      zIndex={70}
+      title="Enable The Vault?"
+      icon={
+        <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+          <Lock size={18} className="text-[#6b2fa5]" />
         </div>
-
-        <div className="text-center space-y-2">
-          <h3 className="text-lg font-bold text-gray-900">Enable The Vault?</h3>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            The Vault requires you and any Admins you choose to enter a personal Vault Key
-            before any payout on this event can clear.
-          </p>
-        </div>
-
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
-          <ShieldAlert size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-800 leading-relaxed">
-            <strong>This cannot be turned off once enabled.</strong> Any Admin you add to the
-            Vault also cannot be removed afterward. Only proceed if you're sure.
-          </p>
-        </div>
-
-        <div className="flex gap-3">
+      }
+      footer={
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
           <button
             onClick={onCancel}
             disabled={submitting}
@@ -110,12 +98,27 @@ function EnableVaultDialog({
             {submitting ? "Enabling..." : "Enable Vault"}
           </button>
         </div>
+      }
+    >
+      <div className="space-y-5">
+        <p className="text-sm text-gray-600 leading-relaxed">
+          The Vault requires you and any Admins you choose to enter a personal Vault Key
+          before any payout on this event can clear.
+        </p>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
+          <ShieldAlert size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-800 leading-relaxed">
+            <strong>This cannot be turned off once enabled.</strong> Any Admin you add to the
+            Vault also cannot be removed afterward. Only proceed if you're sure.
+          </p>
+        </div>
 
         <div className="flex justify-center">
           <WhatIsThisLink align="left" />
         </div>
       </div>
-    </div>
+    </ResponsiveSheet>
   )
 }
 
@@ -132,35 +135,21 @@ function AddParticipantDialog({
   submitting: boolean
 }) {
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={(e) => { if (e.target === e.currentTarget && !submitting) onCancel() }}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
-        <div className="flex justify-center">
-          <div className="w-14 h-14 bg-purple-100 rounded-full flex items-center justify-center">
-            <UserPlus size={24} className="text-[#6b2fa5]" />
-          </div>
+    <ResponsiveSheet
+      open
+      onClose={onCancel}
+      dismissible={!submitting}
+      role="alertdialog"
+      size="md"
+      zIndex={70}
+      title="Add to the Vault?"
+      icon={
+        <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+          <UserPlus size={18} className="text-[#6b2fa5]" />
         </div>
-
-        <div className="text-center space-y-2">
-          <h3 className="text-lg font-bold text-gray-900">Add to the Vault?</h3>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            <span className="font-semibold text-gray-900">
-              {candidate.displayName || candidate.collaboratorEmail}
-            </span>{" "}
-            will need to enter their own Vault Key on every withdrawal from this event.
-          </p>
-        </div>
-
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
-          <ShieldAlert size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-amber-800 leading-relaxed">
-            <strong>This is permanent.</strong> Once added, they cannot be removed from the Vault.
-          </p>
-        </div>
-
-        <div className="flex gap-3">
+      }
+      footer={
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
           <button
             onClick={onCancel}
             disabled={submitting}
@@ -177,8 +166,24 @@ function AddParticipantDialog({
             {submitting ? "Adding..." : "Add Permanently"}
           </button>
         </div>
+      }
+    >
+      <div className="space-y-5">
+        <p className="text-sm text-gray-600 leading-relaxed">
+          <span className="font-semibold text-gray-900 break-all">
+            {candidate.displayName || candidate.collaboratorEmail}
+          </span>{" "}
+          will need to enter their own Vault Key on every withdrawal from this event.
+        </p>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
+          <ShieldAlert size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-800 leading-relaxed">
+            <strong>This is permanent.</strong> Once added, they cannot be removed from the Vault.
+          </p>
+        </div>
       </div>
-    </div>
+    </ResponsiveSheet>
   )
 }
 

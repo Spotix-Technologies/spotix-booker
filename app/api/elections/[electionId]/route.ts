@@ -22,7 +22,17 @@ import { NextRequest, NextResponse } from "next/server"
 import { listOffices, countVoters, updateElection } from "@/lib/election-db"
 import { requireElectionOwner } from "@/lib/election-auth"
 
-const EDITABLE_FIELDS = ["name", "description", "image", "votingStartsAt", "votingEndsAt", "editGraceDays", "allowVoterPrefill"] as const
+const EDITABLE_FIELDS = [
+  "name",
+  "description",
+  "image",
+  "votingStartsAt",
+  "votingEndsAt",
+  "registrationStartsAt",
+  "registrationEndsAt",
+  "editGraceDays",
+  "allowVoterPrefill",
+] as const
 
 export async function GET(_req: Request, { params }: { params: Promise<{ electionId: string }> }) {
   const { electionId } = await params

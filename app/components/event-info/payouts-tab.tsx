@@ -135,7 +135,7 @@ function classifyPayoutError(rawMessage: string, txnDate: string): PayoutError {
   return { kind: "generic", reason: rawMessage }
 }
 
-// ─── Structured Error Banner ──────────────────────────────────────────────────
+//  Structured Error Banner 
 function PayoutErrorBanner({
   error,
   onDismiss,
@@ -206,7 +206,7 @@ function PayoutErrorBanner({
   )
 }
 
-// ─── Status badge config for TxnCard ─────────────────────────────────────────
+//  Status badge config for TxnCard 
 const STATUS_BADGE: Record<
   string,
   { label: string; bg: string; text: string; icon: React.ReactNode }
@@ -261,7 +261,7 @@ const STATUS_BADGE: Record<
   },
 }
 
-// ─── Transaction Card ─────────────────────────────────────────────────────────
+//  Transaction Card ─
 interface TxnCardProps {
   txn: DailyTransaction
   /** null = no payout record exists for this date yet */
@@ -463,7 +463,7 @@ function TxnCard({ txn, payoutStatus, payoutReference, payoutRecord, eventName, 
   )
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+//  Main Component 
 type ActiveView = "transactions" | "methods" | "addMethod" | "logs"
 
 export default function PayoutsTab({
@@ -961,7 +961,7 @@ export default function PayoutsTab({
         )
       })()}
 
-      {/* ── 3 Stat Blocks ─────────────────────────────────────────────────── */}
+      {/* ── 3 Stat Blocks ─ */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3">
@@ -1040,7 +1040,7 @@ export default function PayoutsTab({
         </div>
       )}
 
-      {/* ── View Toggle ───────────────────────────────────────────────────── */}
+      {/* ── View Toggle  */}
       <div className="flex gap-1 border-b border-gray-200 overflow-x-auto overflow-y-hidden">
         <button
           onClick={() => setActiveView("transactions")}
@@ -1089,7 +1089,7 @@ export default function PayoutsTab({
         </button>
       </div>
 
-      {/* ── Transaction Days View ─────────────────────────────────────────── */}
+      {/* ── Transaction Days View ── */}
       {activeView === "transactions" && (
         <div>
           {txnLoading ? (

@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     venueCoordinates = null, country = null, state = null, eventStart, eventEnd, eventEndDate, eventType,
     enablePricing, ticketPrices = [], enableStopDate = false, stopDate = null,
     enabledCollaboration = false, allowAgents = false,
-    affiliateId = null, affiliateName = null,
+    affiliateId = null,
     eventSlug: requestedSlug = null,
     feeBurden: requestedFeeBurden = null,
   } = body;
@@ -115,6 +115,30 @@ export async function POST(request: NextRequest) {
         return err("Bad Request", `Ticket "${ticket.policy}" has an invalid price`, 400);
       }
     }
+  }
+
+  //  3b. Affiliate — verified server-side, never trusted from the client.
+  // The affiliate's name comes from Firestore, they can't be the organizer,
+  // and the per-ticket rate is LOCKED onto the event right now (admin rate
+  // changes afterwards only apply to events linked later). Bookers cannot
+  // change or remove the affiliate after creation — only Spotix admins can.
+  let resolvedAffiliate: { id: string; name: string; rate: number } | null = null;
+  if (affiliateId) {
+    const affSnap = await adminDb.collection("Affiliates").doc(String(affiliateId).trim()).get();
+    const aff = affSnap.data();
+    if (!affSnap.exists || !aff?.name) {
+      return err("Bad Request", "Affiliate ID is incorrect. Check and try again", 400);
+    }
+    const privSnap = await adminDb.collection("affiliateProfiles").doc(affSnap.id).get();
+    if (privSnap.data()?.uid === organizerId) {
+      return err("Bad Request", "You can't list yourself as the affiliate for your own event", 400);
+    }
+    const settings = (await adminDb.collection("admin").doc("affiliateSettings").get()).data() ?? {};
+    resolvedAffiliate = {
+      id: affSnap.id,
+      name: aff.name,
+      rate: Number(settings.ratePerTicket) || 0,
+    };
   }
 
   //  4. Build event document 
@@ -170,8 +194,10 @@ export async function POST(request: NextRequest) {
     feeBurden,
     enabledCollaboration,
     allowAgents: enabledCollaboration ? allowAgents : false,
-    affiliateId: affiliateId ?? null,
-    affiliateName: affiliateName ?? null,
+    affiliateId: resolvedAffiliate?.id ?? null,
+    affiliateName: resolvedAffiliate?.name ?? null,
+    affiliateRate: resolvedAffiliate?.rate ?? null,
+    affiliateLockedAt: resolvedAffiliate ? FieldValue.serverTimestamp() : null,
     status: "active",   // new events are always active
     ticketsSold: 0,
     revenue: 0,
@@ -232,14 +258,20 @@ export async function POST(request: NextRequest) {
   }
 
   //  8. Affiliate relationship 
-  if (affiliateId) {
+  if (resolvedAffiliate) {
     try {
       const batch = adminDb.batch();
       batch.set(
-        adminDb.collection("Affiliates").doc(affiliateId).collection("affiliatedEvents").doc(eventId),
-        { organizerId, eventId, eventName: eventDoc.eventName, createdAt: FieldValue.serverTimestamp() }
+        adminDb.collection("Affiliates").doc(resolvedAffiliate.id).collection("affiliatedEvents").doc(eventId),
+        {
+          organizerId,
+          eventId,
+          eventName: eventDoc.eventName,
+          rate: resolvedAffiliate.rate,
+          createdAt: FieldValue.serverTimestamp(),
+        }
       );
-      batch.update(adminDb.collection("Affiliates").doc(affiliateId), {
+      batch.update(adminDb.collection("Affiliates").doc(resolvedAffiliate.id), {
         eventCount: FieldValue.increment(1),
       });
       await batch.commit();

@@ -16,6 +16,8 @@
 import { useEffect, useState } from "react"
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Button } from "@/components/ui/button"
+import { useChartReady } from "@/hooks/useChartReady"
+import { ResponsiveSheet } from "@/components/ui/responsive-sheet"
 
 interface OfficeTally {
   officeId: string
@@ -24,6 +26,11 @@ interface OfficeTally {
 }
 
 export function ResultsTab({ electionId, offices, election, onPublished }: { electionId: string; offices: any[]; election: any; onPublished: () => void }) {
+  // This tab only mounts once selected on the election page, so on
+  // first paint the office cards' bar charts can measure a 0-width
+  // parent and recharts logs the width(-1)/height(-1) warning. Wait
+  // one tick after mount so ResponsiveContainer measures a laid-out DOM.
+  const chartReady = useChartReady()
   const [tally, setTally] = useState<OfficeTally[]>([])
   const [tallyError, setTallyError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -98,40 +105,46 @@ export function ResultsTab({ electionId, offices, election, onPublished }: { ele
           <div key={office.officeId} className="rounded-2xl border border-gray-200 p-4">
             <p className="font-medium text-gray-900">{office.officeName}</p>
             <div className="mt-3 h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={office.candidates.map((c) => ({ name: c.fullName, votes: c.voteCount }))} layout="vertical" margin={{ left: 16, right: 16 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis type="category" dataKey="name" width={120} />
-                  <Tooltip />
-                  <Bar dataKey="votes" fill="#6b2fa5" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {chartReady && (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={office.candidates.map((c) => ({ name: c.fullName, votes: c.voteCount }))} layout="vertical" margin={{ left: 16, right: 16 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" allowDecimals={false} />
+                    <YAxis type="category" dataKey="name" width={120} />
+                    <Tooltip />
+                    <Bar dataKey="votes" fill="#6b2fa5" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
         ))}
       </div>
 
-      {confirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-semibold text-gray-900">Publish results?</h2>
-            <p className="mt-2 text-sm text-gray-600">
-              This is <strong>irreversible</strong>. Once published, every voter and candidate will be able to see the final vote
-              counts. There's no way to hide them again.
-            </p>
-            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handlePublish} disabled={publishing}>
-                {publishing ? "Publishing…" : "Yes, publish results"}
-              </Button>
-            </div>
+      <ResponsiveSheet
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        role="alertdialog"
+        size="sm"
+        dismissible={!publishing}
+        title="Publish results?"
+        footer={
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={publishing}>
+              Cancel
+            </Button>
+            <Button onClick={handlePublish} disabled={publishing}>
+              {publishing ? "Publishing…" : "Yes, publish results"}
+            </Button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <p className="text-sm text-gray-600">
+          This is <strong>irreversible</strong>. Once published, every voter and candidate will be able to see the final vote
+          counts. There's no way to hide them again.
+        </p>
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      </ResponsiveSheet>
     </div>
   )
 }

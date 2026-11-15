@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase"
 import { doc, getDoc, updateDoc, collection, addDoc, query, where, getDocs } from "firebase/firestore"
 import { uploadImage } from "@/lib/image-uploader"
 import { Button } from "@/components/ui/button"
+import { ResponsiveSheet } from "@/components/ui/responsive-sheet"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -526,17 +527,24 @@ export default function VerificationPage() {
 
         {/* Upload modal */}
         {showUploadDialog && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowUploadDialog(null)}>
-            <div className="max-w-sm w-full bg-white rounded-2xl border border-slate-200 shadow-2xl p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#6b2fa5]/8 flex items-center justify-center text-[#6b2fa5]">
-                  {DOC_META[showUploadDialog]?.icon}
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">Upload {DOC_META[showUploadDialog]?.label}</p>
-                  <p className="text-xs text-slate-400">{DOC_META[showUploadDialog]?.hint}</p>
-                </div>
+          <ResponsiveSheet
+            open
+            onClose={() => setShowUploadDialog(null)}
+            size="sm"
+            title={`Upload ${DOC_META[showUploadDialog]?.label ?? ""}`}
+            description={DOC_META[showUploadDialog]?.hint}
+            icon={
+              <div className="w-9 h-9 rounded-xl bg-[#6b2fa5]/8 flex items-center justify-center text-[#6b2fa5]">
+                {DOC_META[showUploadDialog]?.icon}
               </div>
+            }
+            footer={
+              <Button variant="outline" onClick={() => setShowUploadDialog(null)} className="w-full border-slate-200 text-sm">
+              Cancel
+            </Button>
+            }
+          >
+            <div className="space-y-4">
               <div
                 className="border-2 border-dashed border-[#6b2fa5]/25 rounded-xl p-10 text-center cursor-pointer hover:bg-[#6b2fa5]/4 transition-colors"
                 onClick={() => fileInputRef.current?.click()}
@@ -553,11 +561,8 @@ export default function VerificationPage() {
                   <p className="text-xs text-center text-slate-500">{uploadProgress[showUploadDialog]}%</p>
                 </div>
               )}
-              <Button variant="outline" onClick={() => setShowUploadDialog(null)} className="w-full border-slate-200 text-sm">
-                Cancel
-              </Button>
             </div>
-          </div>
+          </ResponsiveSheet>
         )}
 
       </div>

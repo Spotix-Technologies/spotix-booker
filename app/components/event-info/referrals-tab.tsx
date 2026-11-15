@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Trash2, X, AlertCircle, Share2, Check } from "lucide-react"
+import { Plus, Trash2, AlertCircle, Share2, Check } from "lucide-react"
 import { SkeletonRows } from "@/components/ui/skeleton"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
 
 interface ReferralUsage {
   name: string
@@ -259,133 +260,129 @@ export default function ReferralsTab({ eventId }: ReferralsTabProps) {
 
       {/* Delete Confirmation Modal */}
       {codeToDelete && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 size={22} className="text-red-600" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-900 text-center">Delete Referral Code?</h3>
-              <p className="text-sm text-slate-500 text-center mt-2">
-                Are you sure you want to delete{" "}
-                <span className="font-mono font-semibold text-slate-700">{codeToDelete}</span>?
-                This action cannot be undone.
-              </p>
-            </div>
-            <div className="flex gap-3 px-6 pb-6">
-              <button
-                onClick={() => setCodeToDelete(null)}
-                className="flex-1 py-2.5 px-4 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-all duration-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteReferral}
-                disabled={loading}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed active:scale-95"
-              >
-                {loading ? "Deleting..." : "Delete"}
-              </button>
-            </div>
+      <ResponsiveSheet
+        open
+        onClose={() => setCodeToDelete(null)}
+        size="sm"
+        role="alertdialog"
+        hideHeader
+        showClose={false}
+        ariaLabel="Delete Referral Code?"
+        footer={
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
+            <button
+              onClick={() => setCodeToDelete(null)}
+              className="flex-1 py-2.5 px-4 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-all duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDeleteReferral}
+              disabled={loading}
+              className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed active:scale-95"
+            >
+              {loading ? "Deleting..." : "Delete"}
+            </button>
           </div>
+        }
+      >
+        <div className="pt-2">
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Trash2 size={22} className="text-red-600" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-900 text-center">Delete Referral Code?</h3>
+          <p className="text-sm text-slate-500 text-center mt-2">
+            Are you sure you want to delete{" "}
+            <span className="font-mono font-semibold text-slate-700">{codeToDelete}</span>?
+            This action cannot be undone.
+          </p>
         </div>
+      </ResponsiveSheet>
       )}
 
       {/* Referral Details Modal */}
       {selectedReferral && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100">
-              <div>
-                <h3 className="text-xl sm:text-2xl font-bold text-slate-900">Referral Code</h3>
-                <span className="font-mono text-lg sm:text-xl font-bold text-[#6b2fa5] mt-1 block">{selectedReferral.code}</span>
-              </div>
-              <button
-                onClick={() => setSelectedReferral(null)}
-                className="p-2 text-slate-500 hover:bg-white hover:text-slate-700 rounded-lg transition-all active:scale-95"
-              >
-                <X size={24} />
-              </button>
+      <ResponsiveSheet
+        open
+        onClose={() => setSelectedReferral(null)}
+        size="lg"
+        title="Referral Code"
+        description={<span className="font-mono text-lg sm:text-xl font-bold text-[#6b2fa5] block mt-1 break-all">{selectedReferral.code}</span>}
+        bodyClassName="p-4 sm:p-6"
+      >
+      <div className="flex items-center gap-2 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl px-4 py-3 mb-6">
+        <span className="flex-1 text-xs sm:text-sm font-mono text-slate-600 break-all">
+          {getReferralLink(selectedReferral.code)}
+        </span>
+        <button
+          onClick={() => handleShareReferral(selectedReferral.code)}
+          className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-[#6b2fa5] text-white rounded-lg hover:bg-[#5a2589] active:scale-95 transition-all font-medium text-xs sm:text-sm"
+        >
+          {copiedCode === selectedReferral.code ? (
+            <>
+              <Check size={16} />
+              <span>Copied!</span>
+            </>
+          ) : (
+            <>
+              <Share2 size={16} />
+              <span>Share Link</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-6">
+        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200 shadow-sm">
+          <p className="text-xs sm:text-sm text-blue-700 font-medium mb-1">Total Uses</p>
+          <p className="text-2xl sm:text-3xl font-bold text-blue-900">{selectedReferral.usages.length}</p>
+        </div>
+        <div className="bg-gradient-to-br from-[#6b2fa5]/10 to-[#6b2fa5]/20 rounded-xl p-4 border border-[#6b2fa5]/30 shadow-sm">
+          <p className="text-xs sm:text-sm text-[#6b2fa5] font-medium mb-1">Tickets Sold</p>
+          <p className="text-2xl sm:text-3xl font-bold text-[#6b2fa5]">{selectedReferral.totalTickets}</p>
+        </div>
+      </div>
+
+      <div>
+        <h4 className="text-base sm:text-lg font-bold text-slate-900 mb-4">Usage Details</h4>
+        {selectedReferral.usages.length === 0 ? (
+          <div className="bg-slate-50 rounded-xl border border-slate-200 p-8 sm:p-12 text-center">
+            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+              <Plus size={32} className="text-slate-400" />
             </div>
-
-            {/* Modal Content */}
-            <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(85vh-100px)]">
-              <div className="flex items-center gap-2 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl px-4 py-3 mb-6">
-                <span className="flex-1 text-xs sm:text-sm font-mono text-slate-600 break-all">
-                  {getReferralLink(selectedReferral.code)}
-                </span>
-                <button
-                  onClick={() => handleShareReferral(selectedReferral.code)}
-                  className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-[#6b2fa5] text-white rounded-lg hover:bg-[#5a2589] active:scale-95 transition-all font-medium text-xs sm:text-sm"
-                >
-                  {copiedCode === selectedReferral.code ? (
-                    <>
-                      <Check size={16} />
-                      <span>Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Share2 size={16} />
-                      <span>Share Link</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-6">
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200 shadow-sm">
-                  <p className="text-xs sm:text-sm text-blue-700 font-medium mb-1">Total Uses</p>
-                  <p className="text-2xl sm:text-3xl font-bold text-blue-900">{selectedReferral.usages.length}</p>
-                </div>
-                <div className="bg-gradient-to-br from-[#6b2fa5]/10 to-[#6b2fa5]/20 rounded-xl p-4 border border-[#6b2fa5]/30 shadow-sm">
-                  <p className="text-xs sm:text-sm text-[#6b2fa5] font-medium mb-1">Tickets Sold</p>
-                  <p className="text-2xl sm:text-3xl font-bold text-[#6b2fa5]">{selectedReferral.totalTickets}</p>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-base sm:text-lg font-bold text-slate-900 mb-4">Usage Details</h4>
-                {selectedReferral.usages.length === 0 ? (
-                  <div className="bg-slate-50 rounded-xl border border-slate-200 p-8 sm:p-12 text-center">
-                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
-                      <Plus size={32} className="text-slate-400" />
-                    </div>
-                    <p className="text-slate-600 font-medium">No usage yet</p>
-                    <p className="text-slate-500 text-sm mt-2">This referral code hasn't been used</p>
-                  </div>
-                ) : (
-                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-                          <tr>
-                            <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-semibold text-slate-900">Name</th>
-                            <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-semibold text-slate-900">Ticket Type</th>
-                            <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-semibold text-slate-900">Date</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200">
-                          {selectedReferral.usages.map((usage, index) => (
-                            <tr key={index} className="hover:bg-slate-50 transition-colors">
-                              <td className="px-3 sm:px-4 py-3 text-slate-700 text-sm sm:text-base font-medium">{usage.name}</td>
-                              <td className="px-3 sm:px-4 py-3">
-                                <span className="inline-block px-2.5 py-1 bg-slate-100 text-slate-700 text-xs sm:text-sm rounded-full font-medium">
-                                  {usage.ticketType}
-                                </span>
-                              </td>
-                              <td className="px-3 sm:px-4 py-3 text-slate-600 text-xs sm:text-sm">{formatDate(usage.purchaseDate)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
+            <p className="text-slate-600 font-medium">No usage yet</p>
+            <p className="text-slate-500 text-sm mt-2">This referral code hasn't been used</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                  <tr>
+                    <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-semibold text-slate-900">Name</th>
+                    <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-semibold text-slate-900">Ticket Type</th>
+                    <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-semibold text-slate-900">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {selectedReferral.usages.map((usage, index) => (
+                    <tr key={index} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-3 sm:px-4 py-3 text-slate-700 text-sm sm:text-base font-medium">{usage.name}</td>
+                      <td className="px-3 sm:px-4 py-3">
+                        <span className="inline-block px-2.5 py-1 bg-slate-100 text-slate-700 text-xs sm:text-sm rounded-full font-medium">
+                          {usage.ticketType}
+                        </span>
+                      </td>
+                      <td className="px-3 sm:px-4 py-3 text-slate-600 text-xs sm:text-sm">{formatDate(usage.purchaseDate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
+        )}
+      </div>
+      </ResponsiveSheet>
       )}
     </div>
   )

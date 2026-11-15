@@ -9,6 +9,8 @@ import { StatsGrid } from "@/components/dashboard/stats-grid"
 import { EventsSection } from "@/components/dashboard/events-section"
 import { PollsSection } from "@/components/dashboard/polls-section"
 import { QuickActions } from "@/components/dashboard/quick-actions"
+import { RecentPurchasesCard } from "@/components/dashboard/recent-purchases"
+import type { RecentPurchase } from "@/lib/recent-purchases"
 import { SkeletonRows } from "@/components/ui/skeleton"
 
 interface DashboardStats {
@@ -19,6 +21,8 @@ interface DashboardStats {
   availableBalance: number
   totalPaidOut: number
   totalTicketsSold: number
+  upcomingEvents?: number
+  pastEvents?: number
 }
 
 interface Event {
@@ -29,6 +33,8 @@ interface Event {
   revenue: number
   availableBalance: number
   status: string
+  flagged?: boolean
+  suspended?: boolean
 }
 
 interface Poll {
@@ -40,6 +46,8 @@ interface Poll {
   pollAmount: number
   pollCount: number
   totalPaidOut: number
+  flagged?: boolean
+  suspended?: boolean
 }
 
 interface CachedDashboard {
@@ -96,6 +104,8 @@ export default function DashboardPage() {
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [servedFromCache, setServedFromCache] = useState(false)
   const [ready, setReady]                 = useState(false)
+  const [purchases, setPurchases]         = useState<RecentPurchase[]>([])
+  const [purchasesLoading, setPurchasesLoading] = useState(true)
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -201,6 +211,26 @@ export default function DashboardPage() {
     return () => clearInterval(interval)
   }, [userId, fetchDashboardData])
 
+  // Recent Purchases — independent fetch, own loading state, never blocks
+  // the main dashboard render above (see lib/recent-purchases/index.ts for
+  // how tickets/merch/votes/elections are aggregated server-side).
+  useEffect(() => {
+    if (!userId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await authFetch("/api/dashboard/recent-purchases")
+        const data = await res.json()
+        if (!cancelled && res.ok) setPurchases(data.purchases ?? [])
+      } catch (err) {
+        console.error("Error fetching recent purchases:", err)
+      } finally {
+        if (!cancelled) setPurchasesLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [userId])
+
   const handleRefresh = useCallback(() => {
     if (userId) bustCache(userId)
     setReady(false)
@@ -279,22 +309,34 @@ export default function DashboardPage() {
               <StatsGrid stats={stats} eventsTrendPct={eventsTrendPct} eventsTrendTone={eventsTrendTone} />
             </div>
 
-            {/* Events — delay 200ms */}
-            <div
-              className={`transition-all duration-500 delay-200 ${
-                ready ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-              }`}
-            >
-              {isRefreshing ? <SkeletonRows count={4} rowClassName="h-16" /> : <EventsSection events={events} userId={userId} />}
+            {/* Events + Polls side by side on large screens */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Events — delay 200ms */}
+              <div
+                className={`transition-all duration-500 delay-200 ${
+                  ready ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+                }`}
+              >
+                {isRefreshing ? <SkeletonRows count={4} rowClassName="h-16" /> : <EventsSection events={events} userId={userId} />}
+              </div>
+
+              {/* Polls — delay 250ms */}
+              <div
+                className={`transition-all duration-500 delay-[250ms] ${
+                  ready ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+                }`}
+              >
+                {isRefreshing ? <SkeletonRows count={4} rowClassName="h-16" /> : <PollsSection polls={polls} trendPct={pollsTrendPct} trendTone={pollsTrendTone} />}
+              </div>
             </div>
 
-            {/* Polls — delay 250ms */}
+            {/* Recent Purchases — delay 280ms */}
             <div
-              className={`transition-all duration-500 delay-[250ms] ${
+              className={`transition-all duration-500 delay-[280ms] ${
                 ready ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
               }`}
             >
-              {isRefreshing ? <SkeletonRows count={4} rowClassName="h-16" /> : <PollsSection polls={polls} trendPct={pollsTrendPct} trendTone={pollsTrendTone} />}
+              <RecentPurchasesCard purchases={purchases} loading={purchasesLoading} />
             </div>
 
             {/* Quick Actions — delay 300ms */}

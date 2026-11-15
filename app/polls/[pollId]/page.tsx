@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation"
 import Link from "next/link"
 import { authFetch, getAccessToken, tryRefreshTokens } from "@/lib/auth-client"
 import { InlineTrend } from "@/components/ui/inline-trend"
+import { ResponsiveSheet } from "@/components/ui/responsive-sheet"
 import { SkeletonBlock, SkeletonRows } from "@/components/ui/skeleton"
 import {
   toContestantArray,
@@ -44,7 +45,6 @@ import {
   Ban,
   Scale,
   FileDown,
-  X,
 } from "lucide-react"
 
 // ─ Types ─
@@ -835,63 +835,59 @@ export default function PollManagePage() {
         </div>
 
         {/* Download Result dialog */}
-        {showResultDialog && (
-          <div className="fixed inset-0 z-[300] bg-black/40 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-xl max-w-sm w-full p-6 relative">
-              <button
-                onClick={() => setShowResultDialog(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              {resultStatus === "preparing" && (
-                <>
-                  <div className="w-11 h-11 rounded-full bg-[#6b2fa5]/10 flex items-center justify-center mb-4">
-                    <Loader className="w-5 h-5 text-[#6b2fa5] animate-spin" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-gray-900 mb-1">Preparing your results</h3>
-                  <p className="text-sm text-gray-500">We are preparing the results. Check back later.</p>
-                </>
-              )}
-
-              {resultStatus === "ready" && (
-                <>
-                  <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center mb-4">
-                    <FileDown className="w-5 h-5 text-green-600" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-gray-900 mb-1">We have generated your report</h3>
-                  <p className="text-sm text-gray-500 mb-4">Click to download the results PDF.</p>
-                  <a
-                    href={resultUrl ?? "#"}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setShowResultDialog(false)}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#6b2fa5] text-white rounded-xl text-sm font-semibold hover:bg-[#5a1f8a] transition-colors"
-                  >
-                    <FileDown className="w-4 h-4" /> Click to download
-                  </a>
-                </>
-              )}
-
-              {resultStatus === "error" && (
-                <>
-                  <div className="w-11 h-11 rounded-full bg-red-100 flex items-center justify-center mb-4">
-                    <AlertTriangle className="w-5 h-5 text-red-600" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-gray-900 mb-1">Couldn't generate results</h3>
-                  <p className="text-sm text-gray-500 mb-4">{resultError || "Something went wrong. Please try again."}</p>
-                  <button
-                    onClick={handleDownloadResult}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#6b2fa5] text-white rounded-xl text-sm font-semibold hover:bg-[#5a1f8a] transition-colors"
-                  >
-                    Try again
-                  </button>
-                </>
-              )}
+        <ResponsiveSheet
+          open={showResultDialog}
+          onClose={() => setShowResultDialog(false)}
+          ariaLabel="Download results"
+          size="sm"
+          zIndex={300}
+          bodyClassName="px-5 pb-6 pt-5"
+        >
+        {resultStatus === "preparing" && (
+          <>
+            <div className="w-11 h-11 rounded-full bg-[#6b2fa5]/10 flex items-center justify-center mb-4">
+              <Loader className="w-5 h-5 text-[#6b2fa5] animate-spin" />
             </div>
-          </div>
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">Preparing your results</h3>
+            <p className="text-sm text-gray-500">We are preparing the results. Check back later.</p>
+          </>
         )}
+
+        {resultStatus === "ready" && (
+          <>
+            <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center mb-4">
+              <FileDown className="w-5 h-5 text-green-600" />
+            </div>
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">We have generated your report</h3>
+            <p className="text-sm text-gray-500 mb-4">Click to download the results PDF.</p>
+            <a
+              href={resultUrl ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setShowResultDialog(false)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#6b2fa5] text-white rounded-xl text-sm font-semibold hover:bg-[#5a1f8a] transition-colors"
+            >
+              <FileDown className="w-4 h-4" /> Click to download
+            </a>
+          </>
+        )}
+
+        {resultStatus === "error" && (
+          <>
+            <div className="w-11 h-11 rounded-full bg-red-100 flex items-center justify-center mb-4">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+            </div>
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">Couldn't generate results</h3>
+            <p className="text-sm text-gray-500 mb-4">{resultError || "Something went wrong. Please try again."}</p>
+            <button
+              onClick={handleDownloadResult}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#6b2fa5] text-white rounded-xl text-sm font-semibold hover:bg-[#5a1f8a] transition-colors"
+            >
+              Try again
+            </button>
+          </>
+        )}
+        </ResponsiveSheet>
 
         {/* Tabs */}
         <div className="flex items-center gap-2 mb-4 bg-white border border-gray-200 rounded-xl p-1.5 w-fit">

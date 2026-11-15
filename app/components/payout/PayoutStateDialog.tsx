@@ -1,7 +1,8 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { X, ChevronLeft, ChevronRight } from "lucide-react"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import PayoutStatusCard from "./PayoutStatusCard"
 import type { PayoutLiveState } from "./use-payout-stream"
 
@@ -47,89 +48,68 @@ export default function PayoutStateDialog({ references, onClose, onStatusChange 
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 50,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "rgba(0,0,0,0.5)",
-        backdropFilter: "blur(5px)",
-        WebkitBackdropFilter: "blur(5px)",
-        padding: "0 16px",
-        overflow: "auto",
-      }}
+    <ResponsiveSheet
+      open
+      onClose={onClose}
+      size="md"
+      zIndex={70}
+      title={isBulk ? `Payout ${index + 1} of ${references.length}` : "Payout in progress"}
+      description={isBulk ? "Swipe or use the arrows to check on other transactions" : undefined}
+      bodyClassName="py-4"
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">
-              {isBulk ? `Payout ${index + 1} of ${references.length}` : "Payout in progress"}
-            </h3>
-            {isBulk && <p className="text-xs text-gray-500 mt-0.5">Swipe or use the arrows to check on other transactions</p>}
-          </div>
-          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg transition-colors">
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Card(s) */}
-        <div className="relative mt-4">
-          {isBulk && (
-            <button
-              onClick={() => goTo(index - 1)}
-              disabled={index === 0}
-              className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white shadow-md border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronLeft size={16} />
-            </button>
-          )}
-
-          <div
-            ref={scrollRef}
-            onScroll={handleScroll}
-            className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth px-5 pb-2 gap-4"
-            style={{ scrollbarWidth: "none" }}
+      {/* Card(s) */}
+      <div className="relative">
+        {isBulk && (
+          <button
+            onClick={() => goTo(index - 1)}
+            disabled={index === 0}
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white shadow-md border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            {references.map((reference) => (
-              <div key={reference} className="w-full flex-shrink-0 snap-center" style={{ minWidth: "100%" }}>
-                <PayoutStatusCard reference={reference} onStatusChange={onStatusChange} />
-              </div>
-            ))}
-          </div>
+            <ChevronLeft size={16} />
+          </button>
+        )}
 
-          {isBulk && (
-            <button
-              onClick={() => goTo(index + 1)}
-              disabled={index === references.length - 1}
-              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white shadow-md border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronRight size={16} />
-            </button>
-          )}
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth px-5 pb-2 gap-4"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {references.map((reference) => (
+            <div key={reference} className="w-full flex-shrink-0 snap-center" style={{ minWidth: "100%" }}>
+              <PayoutStatusCard reference={reference} onStatusChange={onStatusChange} />
+            </div>
+          ))}
         </div>
 
         {isBulk && (
-          <div className="flex items-center justify-center gap-1.5 pb-4">
-            {references.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => goTo(i)}
-                className={`h-1.5 rounded-full transition-all ${i === index ? "w-4 bg-[#6b2fa5]" : "w-1.5 bg-gray-200"}`}
-              />
-            ))}
-          </div>
+          <button
+            onClick={() => goTo(index + 1)}
+            disabled={index === references.length - 1}
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white shadow-md border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <ChevronRight size={16} />
+          </button>
         )}
-
-        <div className="px-5 pb-5 pt-1">
-          <p className="text-xs text-gray-400 text-center">
-            You can close this and check progress later from the payout log — processing continues in the background.
-          </p>
-        </div>
       </div>
-    </div>
+
+      {isBulk && (
+        <div className="flex items-center justify-center gap-1.5 pb-4">
+          {references.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => goTo(i)}
+              className={`h-1.5 rounded-full transition-all ${i === index ? "w-4 bg-[#6b2fa5]" : "w-1.5 bg-gray-200"}`}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="px-5 pt-1">
+        <p className="text-xs text-gray-400 text-center">
+          You can close this and check progress later from the payout log — processing continues in the background.
+        </p>
+      </div>
+    </ResponsiveSheet>
   )
 }

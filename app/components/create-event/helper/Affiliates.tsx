@@ -72,8 +72,8 @@ export function Affiliates({
 
       <div className="space-y-5">
         <p className="text-sm text-slate-600">
-          Add an affiliate partner to this event. Affiliates will earn commissions from
-          ticket sales.
+          Add an affiliate partner to this event. Affiliates earn a flat amount from every
+          ticket sold. This can't be changed after the event is created.
         </p>
 
         {/* Verified Affiliate Display */}
@@ -190,6 +190,7 @@ export function Affiliates({
                   <li>Enter and verify an affiliate ID to link them to your event</li>
                   <li>Affiliates earn commissions from ticket sales</li>
                   <li>You can add one affiliate per event</li>
+                  <li className="font-semibold">Once your event is created, the affiliate can't be changed by you. Contact Spotix support if something is wrong</li>
                   <li>This field is optional</li>
                 </ul>
               </div>

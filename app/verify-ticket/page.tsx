@@ -9,6 +9,7 @@ import { Nav } from "@/components/nav"
 import ScannerSelectionDialog from "@/components/verify-ticket/scanner-selection-dialog"
 import EventSelector from "@/components/verify-ticket/event-selector"
 import TicketForm from "@/components/verify-ticket/ticket-form"
+import { ResponsiveSheet } from "@/components/ui/responsive-sheet"
 import QrScanner from "@/components/verify-ticket/qr-scanner"
 import VerificationResult from "@/components/verify-ticket/verification-result"
 import { Preloader } from "@/components/preloader"
@@ -309,14 +310,20 @@ export default function VerifyTicketPage() {
             )}
           </div>
 
-          {loading && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
-              <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center gap-4">
-                <div className="w-16 h-16 border-4 border-[#6b2fa5]/30 border-t-[#6b2fa5] rounded-full animate-spin"></div>
-                <p className="text-gray-900 font-semibold text-lg">Verifying ticket...</p>
-              </div>
+          <ResponsiveSheet
+            open={loading}
+            onClose={() => {}}
+            dismissible={false}
+            size="sm"
+            hideHeader
+            ariaLabel="Verifying ticket"
+            zIndex={80}
+          >
+            <div className="flex flex-col items-center gap-4 py-6">
+              <div className="w-16 h-16 border-4 border-[#6b2fa5]/30 border-t-[#6b2fa5] rounded-full animate-spin"></div>
+              <p className="text-gray-900 font-semibold text-lg">Verifying ticket...</p>
             </div>
-          )}
+          </ResponsiveSheet>
         </div>
       </main>
     </div>

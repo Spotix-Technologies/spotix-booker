@@ -10,7 +10,7 @@ import { Search, Plus, Calendar, TrendingUp, Users, RefreshCw, ArrowRightLeft, E
 import { useBalanceVisibility, useBalanceVisibilityRoot, BalanceVisibilityCtx } from "@/hooks/use-balance-visibility"
 import type { EventData, CollaboratedEventData } from "@/types/event"
 
-// ─── Cache helpers ─────────────────────────────────────────────────────────────
+//  Cache helpers 
 const CACHE_TTL_MS = 20 * 60 * 1000
 
 function cacheKey(userId: string, action: string) {
@@ -43,7 +43,7 @@ function bustCache(userId: string) {
   localStorage.removeItem(cacheKey(userId, "collaborated"))
 }
 
-// ─── Page ──────────────────────────────────────────────────────────────────────
+//  Page 
 export default function EventsPage() {
   const router = useRouter()
 
@@ -61,11 +61,11 @@ export default function EventsPage() {
   const balanceCtx = useBalanceVisibilityRoot()
   const { visible: balanceVisible, toggle: toggleBalance } = balanceCtx
 
-  // ─── Transfer state ────────────────────────────────────────────────────────
+  //  Transfer state 
   const [showTransferDialog, setShowTransferDialog] = useState(false)
   const [incomingTransfers, setIncomingTransfers]   = useState<IncomingTransfer[]>([])
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
+  //  Auth 
   useEffect(() => {
     const initializeAuth = async () => {
       try {
@@ -94,7 +94,7 @@ export default function EventsPage() {
     initializeAuth()
   }, [router])
 
-  // ── Fetch incoming transfers ───────────────────────────────────────────────
+  //  Fetch incoming transfers 
   useEffect(() => {
     if (!authChecked) return
     fetch("/api/event/transfer/incoming")
@@ -103,7 +103,7 @@ export default function EventsPage() {
       .catch(() => {})
   }, [authChecked])
 
-  // ── Fetch events ──────────────────────────────────────────────────────────
+  //  Fetch events 
   const fetchEvents = useCallback(
     async (bust = false) => {
       if (!userId) return
@@ -168,7 +168,7 @@ export default function EventsPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [userId, fetchEvents])
 
-  // ── Optimistic event updater ───────────────────────────────────────────────
+  //  Optimistic event updater 
   const handleEventsChange = useCallback(
     (updater: (prev: EventData[]) => EventData[]) => {
       setEvents((prev) => {
@@ -180,7 +180,7 @@ export default function EventsPage() {
     [userId]
   )
 
-  // ── Transfer dialog handler ────────────────────────────────────────────────
+  //  Transfer dialog handler 
   const handleTransferActioned = useCallback(
     (transferId: string, newStatus: "accepted" | "rejected") => {
       setIncomingTransfers((prev) => prev.filter((t) => t.id !== transferId))
@@ -192,7 +192,7 @@ export default function EventsPage() {
     [userId, fetchEvents]
   )
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
+  //  Stats 
   const totalEvents      = events.length
   const activeEvents     = events.filter((e) => e.status === "active").length
   const totalRevenue     = events.reduce((s, e) => s + e.revenue, 0)
@@ -218,7 +218,7 @@ export default function EventsPage() {
     <>
       <div className="min-h-screen bg-slate-50">
 
-        {/* ── Page header ──────────────────────────────────────────────────── */}
+        {/*  Page header  */}
         <div className="bg-white border-b border-slate-100 shadow-sm">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
 
@@ -314,7 +314,7 @@ export default function EventsPage() {
           </div>
         </div>
 
-        {/* ── Content ──────────────────────────────────────────────────────── */}
+        {/*  Content  */}
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
           {/* Incoming transfer banner */}

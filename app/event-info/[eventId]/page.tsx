@@ -9,8 +9,10 @@ import { tryRefreshTokens, getAccessToken, authFetch } from "@/lib/auth-client"
 import { ArrowLeft, RefreshCw, LogOut, Shield, UserCheck, Calculator, AlertTriangle, Settings, ChevronLeft, ChevronRight, Code2 } from "lucide-react"
 import { eventCacheManager } from "@/lib/cache-manger"
 import { toast } from "@/lib/toast"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
 import { SkeletonStatGrid, SkeletonRows } from "@/components/ui/skeleton"
 import OverviewTab from "@/components/event-info/overview-tab"
+import ObservabilityTab from "@/components/event-info/observability-tab"
 import AttendeesTab from "@/components/event-info/attendees-tab"
 import CheckinTab from "@/components/event-info/checkin-tab"
 import DiscountsTab from "@/components/event-info/discounts-tab"
@@ -102,7 +104,7 @@ const TAB_LABELS: Record<TabId, string> = {
   form:      "Form",       payouts:   "Payouts",     responses: "Responses",
   weather:   "Weather",    transfer:  "Transfer Event", edit:   "Edit Event",
   teams:     "Teams",      agentRequests: "Agent Requests",
-  apiAccess: "API Access",
+  apiAccess: "API Access", observability: "Observability",
 }
 
 // ── (resolveVisibleTabs now imported from @/lib/team-tabs — shared with
@@ -128,22 +130,21 @@ function ExitTeamDialog({ eventName, onConfirm, onCancel, loading }: {
   eventName: string; onConfirm: () => void; onCancel: () => void; loading: boolean
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      onClick={(e) => { if (e.target === e.currentTarget && !loading) onCancel() }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
-            <AlertTriangle size={20} className="text-red-500" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-slate-900">Exit Team</h3>
-            <p className="text-sm text-slate-500">This cannot be undone</p>
-          </div>
+    <ResponsiveSheet
+      open
+      onClose={onCancel}
+      dismissible={!loading}
+      size="sm"
+      role="alertdialog"
+      icon={
+        <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+          <AlertTriangle size={20} className="text-red-500" />
         </div>
-        <p className="text-sm text-slate-600">
-          You&apos;ll lose access to <span className="font-semibold">{eventName}</span>. The owner will need to re-add you.
-        </p>
-        <div className="flex gap-3">
+      }
+      title="Exit Team"
+      description="This cannot be undone"
+      footer={
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
           <button onClick={onCancel} disabled={loading}
             className="flex-1 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
             Cancel
@@ -154,8 +155,12 @@ function ExitTeamDialog({ eventName, onConfirm, onCancel, loading }: {
             Exit Team
           </button>
         </div>
-      </div>
-    </div>
+      }
+    >
+      <p className="text-sm text-slate-600">
+        You&apos;ll lose access to <span className="font-semibold">{eventName}</span>. The owner will need to re-add you.
+      </p>
+    </ResponsiveSheet>
   )
 }
 
@@ -625,6 +630,7 @@ function EventInfoInner({ eventId }: { eventId: string }) {
     teams: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
     agentRequests: undefined,
     apiAccess: <Code2 size={14} />,
+    observability: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" /></svg>,
   }
 
   const eventDate = new Date(eventData.eventDate)
@@ -820,6 +826,12 @@ function EventInfoInner({ eventId }: { eventId: string }) {
             {activeTab === "overview" && visibleTabs.includes("overview") && (
               loadedTabs.has("overview") && eventData
                 ? <OverviewTab eventData={eventData} availableBalance={availableBalance} totalPaidOut={totalPaidOut} copiedField={copiedField} bookerBVT={bookerBVT} ticketSalesByDay={ticketSalesByDay} ticketTypeData={ticketTypeData} salesTrend={salesTrend} ticketCountTrend={ticketCountTrend} copyToClipboard={copyToClipboard} eventId={eventId} canEditFeeBurden={isOwner || collabInfo?.role === "admin"} />
+                : <TabSkeleton />
+            )}
+
+            {activeTab === "observability" && visibleTabs.includes("observability") && (
+              loadedTabs.has("observability")
+                ? <ObservabilityTab eventId={eventId} />
                 : <TabSkeleton />
             )}
 

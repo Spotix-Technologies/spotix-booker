@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Settings, Ticket, Trash2, AlertTriangle, Check, X } from "lucide-react"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
+import { Settings, Ticket, Trash2, AlertTriangle, Check } from "lucide-react"
 
 interface TicketType {
   policy: string
@@ -136,67 +137,65 @@ export function FormSettings({
       </div>
 
       {/* Delete Confirmation Dialog */}
-      {showDeleteDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-in zoom-in-95 duration-200">
-            {/* Dialog Header */}
-            <div className="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4 rounded-t-2xl">
-              <div className="flex items-center gap-3 text-white">
-                <div className="flex items-center justify-center w-12 h-12 bg-white/20 rounded-full backdrop-blur-sm">
-                  <AlertTriangle className="w-6 h-6" />
-                </div>
-                <h3 className="text-xl font-bold">Delete Form</h3>
-              </div>
-            </div>
+      <ResponsiveSheet
+        open={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        dismissible={!isDeleting}
+        role="alertdialog"
+        size="md"
+        zIndex={70}
+        title="Delete Form"
+        icon={
+          <div className="flex items-center justify-center w-10 h-10 bg-red-100 rounded-full">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+          </div>
+        }
+        footer={
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
+            <button
+              onClick={() => setShowDeleteDialog(false)}
+              disabled={isDeleting}
+              className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isDeleting ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-5 h-5" />
+                  Delete Form
+                </>
+              )}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-slate-700 leading-relaxed">
+            The form will be deleted for all ticket types. Your existing responses will be stored but no other
+            responses can be submitted.
+          </p>
+          <p className="text-slate-700 font-semibold">Are you sure you want to continue?</p>
 
-            {/* Dialog Content */}
-            <div className="p-6 space-y-4">
-              <p className="text-slate-700 leading-relaxed">
-                The form will be deleted for all ticket types. Your existing responses will be stored but no other
-                responses can be submitted.
-              </p>
-              <p className="text-slate-700 font-semibold">Are you sure you want to continue?</p>
-
-              {/* Warning Box */}
-              <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
-                <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-red-800">
-                  <strong>Warning:</strong> This action cannot be undone. You will need to recreate the form from
-                  scratch if you change your mind.
-                </p>
-              </div>
-            </div>
-
-            {/* Dialog Actions */}
-            <div className="flex gap-3 px-6 pb-6">
-              <button
-                onClick={() => setShowDeleteDialog(false)}
-                disabled={isDeleting}
-                className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                disabled={isDeleting}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isDeleting ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Deleting...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-5 h-5" />
-                    Delete Form
-                  </>
-                )}
-              </button>
-            </div>
+          {/* Warning Box */}
+          <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-800">
+              <strong>Warning:</strong> This action cannot be undone. You will need to recreate the form from
+              scratch if you change your mind.
+            </p>
           </div>
         </div>
-      )}
+      </ResponsiveSheet>
     </>
   )
 }

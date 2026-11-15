@@ -5,6 +5,7 @@ import Image from "next/image"
 import { authFetch } from "@/lib/auth-client"
 import { Trash2, Plus, Search, X, AlertCircle } from "lucide-react"
 import { SkeletonCardGrid } from "@/components/ui/skeleton"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
 
 interface Listing {
   id: string
@@ -331,36 +332,44 @@ export default function MerchTab({ eventId, eventName, currentUserId }: MerchTab
 
       {/* Remove Confirmation Modal */}
       {listingToRemove && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 size={22} className="text-red-600" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-900 text-center">Remove Listing?</h3>
-              <p className="text-sm text-slate-500 text-center mt-2">
-                Are you sure you want to remove{" "}
-                <span className="font-semibold text-slate-700">{listingToRemove.productName}</span>{" "}
-                from this event? This action cannot be undone.
-              </p>
-            </div>
-            <div className="flex gap-3 px-6 pb-6">
-              <button
-                onClick={() => setListingToRemove(null)}
-                className="flex-1 py-2.5 px-4 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-all duration-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleRemoveListing}
-                disabled={loading}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed active:scale-95"
-              >
-                {loading ? "Removing..." : "Remove"}
-              </button>
-            </div>
+      <ResponsiveSheet
+        open
+        onClose={() => setListingToRemove(null)}
+        size="sm"
+        role="alertdialog"
+        hideHeader
+        showClose={false}
+        ariaLabel="Remove Listing?"
+        footer={
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
+            <button
+              onClick={() => setListingToRemove(null)}
+              className="flex-1 py-2.5 px-4 rounded-xl border-2 border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-all duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleRemoveListing}
+              disabled={loading}
+              className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed active:scale-95"
+            >
+              {loading ? "Removing..." : "Remove"}
+            </button>
           </div>
+        }
+      >
+        <div className="pt-2">
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Trash2 size={22} className="text-red-600" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-900 text-center">Remove Listing?</h3>
+          <p className="text-sm text-slate-500 text-center mt-2">
+            Are you sure you want to remove{" "}
+            <span className="font-semibold text-slate-700">{listingToRemove.productName}</span>{" "}
+            from this event? This action cannot be undone.
+          </p>
         </div>
+      </ResponsiveSheet>
       )}
     </div>
   )

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { FileText, Loader2, Calendar, User, Mail, Ticket, Download, Filter, Search } from "lucide-react"
 import { SkeletonTable } from "@/components/ui/skeleton"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
 
 interface Response {
   id: string
@@ -240,102 +241,81 @@ export default function ResponsesTab({ userId, eventId }: ResponsesTabProps) {
 
       {/* Detailed Response Modal */}
       {selectedResponse && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
-          onClick={() => setSelectedResponse(null)}
+        <ResponsiveSheet
+          open
+          onClose={() => setSelectedResponse(null)}
+          size="lg"
+          hideHeader
+          ariaLabel="Response details"
+          bodyClassName="p-0"
         >
-          <div
-            className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="bg-gradient-to-r from-[#6b2fa5] to-purple-600 px-6 py-5 sticky top-0 z-10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center justify-center w-12 h-12 bg-white/20 rounded-xl backdrop-blur-sm">
-                    <FileText className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">
-                      {selectedResponse.attendeeInfo.fullName || "Anonymous Response"}
-                    </h3>
-                    <p className="text-purple-100 text-sm">{formatDate(selectedResponse.submittedAt)}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedResponse(null)}
-                  className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-                >
-                  <svg
-                    className="w-6 h-6 text-white"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path d="M6 18L18 6M6 6l12 12"></path>
-                  </svg>
-                </button>
+          <div className="bg-gradient-to-r from-[#6b2fa5] to-purple-600 px-5 py-5 pr-14">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-12 h-12 bg-white/20 rounded-xl backdrop-blur-sm shrink-0">
+                <FileText className="w-6 h-6 text-white" />
               </div>
-            </div>
-
-            {/* Modal Content */}
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-              {/* Attendee Info */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-slate-50 rounded-lg">
-                <div>
-                  <p className="text-xs text-slate-600 mb-1">Email</p>
-                  <p className="font-semibold text-slate-900 truncate">
-                    {selectedResponse.attendeeInfo.email || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 mb-1">Ticket Type</p>
-                  <p className="font-semibold text-slate-900">{selectedResponse.attendeeInfo.ticketType || "N/A"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-600 mb-1">Submitted</p>
-                  <p className="font-semibold text-slate-900">{formatDate(selectedResponse.submittedAt)}</p>
-                </div>
-              </div>
-
-              {/* Responses */}
-              <div className="space-y-6">
-                <h4 className="text-lg font-bold text-slate-900">Responses</h4>
-                {questions.map((question, index) => {
-                  const answer = selectedResponse.responses[question.id]
-                  return (
-                    <div key={question.id} className="pb-6 border-b border-slate-200 last:border-0">
-                      <p className="font-semibold text-slate-900 mb-3">
-                        {index + 1}. {question.questionText}
-                      </p>
-                      <div className="pl-4">
-                        {answer ? (
-                          Array.isArray(answer) ? (
-                            <ul className="space-y-2">
-                              {answer.map((item, i) => (
-                                <li key={i} className="flex items-center gap-2 text-slate-700">
-                                  <div className="w-1.5 h-1.5 bg-[#6b2fa5] rounded-full"></div>
-                                  {item}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="text-slate-700 bg-slate-50 px-4 py-3 rounded-lg">{String(answer)}</p>
-                          )
-                        ) : (
-                          <p className="text-slate-400 italic">No response</p>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+              <div className="min-w-0">
+                <h3 className="text-xl font-bold text-white truncate">
+                  {selectedResponse.attendeeInfo.fullName || "Anonymous Response"}
+                </h3>
+                <p className="text-purple-100 text-sm">{formatDate(selectedResponse.submittedAt)}</p>
               </div>
             </div>
           </div>
-        </div>
+
+          <div className="p-5 sm:p-6">
+          {/* Attendee Info */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-slate-50 rounded-lg">
+            <div>
+              <p className="text-xs text-slate-600 mb-1">Email</p>
+              <p className="font-semibold text-slate-900 truncate">
+                {selectedResponse.attendeeInfo.email || "N/A"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-600 mb-1">Ticket Type</p>
+              <p className="font-semibold text-slate-900">{selectedResponse.attendeeInfo.ticketType || "N/A"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-600 mb-1">Submitted</p>
+              <p className="font-semibold text-slate-900">{formatDate(selectedResponse.submittedAt)}</p>
+            </div>
+          </div>
+
+          {/* Responses */}
+          <div className="space-y-6">
+            <h4 className="text-lg font-bold text-slate-900">Responses</h4>
+            {questions.map((question, index) => {
+              const answer = selectedResponse.responses[question.id]
+              return (
+                <div key={question.id} className="pb-6 border-b border-slate-200 last:border-0">
+                  <p className="font-semibold text-slate-900 mb-3">
+                    {index + 1}. {question.questionText}
+                  </p>
+                  <div className="pl-4">
+                    {answer ? (
+                      Array.isArray(answer) ? (
+                        <ul className="space-y-2">
+                          {answer.map((item, i) => (
+                            <li key={i} className="flex items-center gap-2 text-slate-700">
+                              <div className="w-1.5 h-1.5 bg-[#6b2fa5] rounded-full"></div>
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-slate-700 bg-slate-50 px-4 py-3 rounded-lg">{String(answer)}</p>
+                      )
+                    ) : (
+                      <p className="text-slate-400 italic">No response</p>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          </div>
+        </ResponsiveSheet>
       )}
     </div>
   )

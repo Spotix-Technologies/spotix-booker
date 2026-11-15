@@ -14,6 +14,8 @@ interface Poll {
   pollAmount: number
   pollCount: number
   totalPaidOut: number
+  flagged?: boolean
+  suspended?: boolean
 }
 
 function fmtCurrency(n: number) {
@@ -29,6 +31,9 @@ function pollStatus(poll: Poll): "upcoming" | "active" | "ended" {
   return "active"
 }
 
+// Window-based badge (upcoming/active/ended) — kept as-is, since a poll
+// runs across a start→end window rather than a single calendar day, so
+// the simpler Past/Today/Upcoming split used for events doesn't fit here.
 const StatusBadge = ({ status }: { status: "upcoming" | "active" | "ended" }) => {
   const cfg: Record<string, string> = {
     active:   "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -39,6 +44,19 @@ const StatusBadge = ({ status }: { status: "upcoming" | "active" | "ended" }) =>
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${cfg[status]}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${status === "active" ? "bg-emerald-500 animate-pulse" : "bg-current opacity-50"}`} />
       {status.charAt(0).toUpperCase() + status.slice(1)}
+    </span>
+  )
+}
+
+// Moderation tag — flagged/suspended still apply alongside the window
+// badge above, same convention as events-section.tsx.
+const ModerationBadge = ({ poll }: { poll: Poll }) => {
+  if (!poll.suspended && !poll.flagged) return null
+  const label = poll.suspended ? "Suspended" : "Flagged"
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-red-50 text-red-600 border-red-200">
+      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-50" />
+      {label}
     </span>
   )
 }
@@ -121,7 +139,10 @@ export function PollsSection({ polls, trendPct, trendTone }: { polls: Poll[]; tr
                           <MaskedAmount value={fmtCurrency(poll.pollAmount)} size="sm" className="text-slate-700" />
                         </td>
                         <td className="px-5 py-4">
-                          <StatusBadge status={status} />
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <StatusBadge status={status} />
+                            <ModerationBadge poll={poll} />
+                          </div>
                         </td>
                         <td className="px-5 py-4">
                           <Link
@@ -146,7 +167,10 @@ export function PollsSection({ polls, trendPct, trendTone }: { polls: Poll[]; tr
                   <div key={poll.id} className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-2">
                       <p className="font-bold text-slate-900 text-sm leading-tight">{poll.pollName}</p>
-                      <StatusBadge status={status} />
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        <StatusBadge status={status} />
+                        <ModerationBadge poll={poll} />
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-xs">

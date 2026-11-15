@@ -41,8 +41,19 @@ export function DashboardHeader({ userName, onRefresh, isRefreshing, lastRefresh
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4">
 
-      {/* ── Greeting card ─────────────────────────────────────────────────── */}
+      {/*  Greeting card  */}
       <div className={`relative bg-gradient-to-br ${gradientClass} rounded-2xl p-7 text-white overflow-hidden shadow-lg`}>
+        {/* create-event-bg.png as a backdrop — sits under the gradient
+            overlay so text stays readable. Assumed filename/ext; swap the
+            path below if it's actually .jpg/.webp/etc. */}
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-45"
+          style={{ backgroundImage: "url('/create-event-bg.jpg')" }}
+        />
+        {/* Color overlay on top of the image so copy stays legible — lighter
+            than before so the image reads through more clearly */}
+        <div className={`absolute inset-0 bg-gradient-to-br ${gradientClass} opacity-70`} />
+
         {/* Subtle grid pattern */}
         <div className="absolute inset-0 opacity-[0.07]">
           <svg className="w-full h-full" viewBox="0 0 800 200">
@@ -61,10 +72,27 @@ export function DashboardHeader({ userName, onRefresh, isRefreshing, lastRefresh
 
         <div className="relative z-10 flex items-start justify-between gap-4">
           <div className="space-y-2 flex-1">
-            {/* Online pill */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/15 backdrop-blur-sm rounded-full text-xs font-semibold">
-              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-              Dashboard Active
+            {/* Uptime status badge. The iframe's own internal link isn't
+                reliably tappable on mobile (cross-origin iframe click
+                events don't bubble to a wrapping <a>), so a transparent
+                anchor sits on top of it to guarantee the tap works
+                everywhere. */}
+            <div className="relative inline-block">
+              <iframe
+                src="https://status.spotix.com.ng/badge?theme=dark"
+                width="250"
+                height="30"
+                frameBorder="0"
+                scrolling="no"
+                style={{ colorScheme: "normal", pointerEvents: "none" }}
+              />
+              <a
+                href="https://status.spotix.com.ng"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="absolute inset-0"
+                aria-label="View status page"
+              />
             </div>
 
             <div>
@@ -101,7 +129,7 @@ export function DashboardHeader({ userName, onRefresh, isRefreshing, lastRefresh
         </div>
       </div>
 
-      {/* ── Right action panel ────────────────────────────────────────────── */}
+      {/*  Right action panel  */}
       <div className="lg:w-72 bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Quick Actions</p>
 

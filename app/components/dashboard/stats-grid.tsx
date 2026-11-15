@@ -1,6 +1,6 @@
 "use client"
 
-import { Calendar, TrendingUp, Tag } from "lucide-react"
+import { CalendarClock, CalendarCheck2 } from "lucide-react"
 import { MaskedAmount, BalanceToggleButton } from "@/components/ui/masked-amount"
 import { useBalanceVisibilityRoot, BalanceVisibilityCtx } from "@/hooks/use-balance-visibility"
 import { TrendBadge } from "./trend-badge"
@@ -13,6 +13,9 @@ interface DashboardStats {
   availableBalance: number
   totalPaidOut: number
   totalTicketsSold: number
+  // Date-based grouping (today counts as "upcoming" — see lib/event-time-status.ts)
+  upcomingEvents?: number
+  pastEvents?: number
 }
 
 function fmt(n: number) {
@@ -38,12 +41,12 @@ export function StatsGrid({ stats, eventsTrendPct, eventsTrendTone }: { stats: D
           </div>
         </div>
 
-        {/* Row 1: counts */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Row 1: upcoming vs past — grouped by date rather than active/inactive/tickets */}
+        <div className="grid grid-cols-2 gap-3">
           <StatCard
-            label="Total Events"
-            value={fmt(stats.totalEvents)}
-            icon={<Calendar size={15} className="text-[#6b2fa5]" />}
+            label="Upcoming Events"
+            value={fmt(stats.upcomingEvents ?? 0)}
+            icon={<CalendarClock size={15} className="text-[#6b2fa5]" />}
             iconBg="bg-[#6b2fa5]/10"
             valueColor="text-slate-900"
             delay="delay-[0ms]"
@@ -51,28 +54,12 @@ export function StatsGrid({ stats, eventsTrendPct, eventsTrendTone }: { stats: D
             trendTone={eventsTrendTone}
           />
           <StatCard
-            label="Active"
-            value={fmt(stats.activeEvents)}
-            icon={<TrendingUp size={15} className="text-emerald-600" />}
-            iconBg="bg-emerald-50"
-            valueColor="text-emerald-700"
+            label="Past Events"
+            value={fmt(stats.pastEvents ?? 0)}
+            icon={<CalendarCheck2 size={15} className="text-[#6b2fa5]" />}
+            iconBg="bg-[#6b2fa5]/10"
+            valueColor="text-slate-900"
             delay="delay-[50ms]"
-          />
-          <StatCard
-            label="Inactive"
-            value={fmt(stats.inactiveEvents)}
-            icon={<Calendar size={15} className="text-slate-400" />}
-            iconBg="bg-slate-100"
-            valueColor="text-slate-600"
-            delay="delay-[100ms]"
-          />
-          <StatCard
-            label="Tickets Sold"
-            value={fmt(stats.totalTicketsSold)}
-            icon={<Tag size={15} className="text-blue-600" />}
-            iconBg="bg-blue-50"
-            valueColor="text-blue-700"
-            delay="delay-[150ms]"
           />
         </div>
 
@@ -116,16 +103,21 @@ function StatCard({
   iconBg: string; valueColor: string; delay: string; trendPct?: number | null; trendTone?: "up" | "down" | "flat"
 }) {
   return (
-    <div className={`bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${delay}`}>
+    <div className={`bg-white rounded-xl border border-slate-200 shadow-sm p-3 sm:p-4 flex items-center gap-2.5 sm:gap-3 min-w-0 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${delay}`}>
       <div className={`w-8 h-8 ${iconBg} rounded-lg flex items-center justify-center flex-shrink-0`}>
         {icon}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 mb-1">
-          <p className="text-xs text-slate-400 font-medium leading-none">{label}</p>
-          {trendPct !== undefined && <TrendBadge pct={trendPct} tone={trendTone} />}
+        <p className="text-[11px] sm:text-xs text-slate-400 font-medium leading-tight mb-1.5 break-words">{label}</p>
+        {/* Trend badge sits beside the value (not the label) so it stays inside the card on narrow screens */}
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <p className={`text-lg font-bold leading-none ${valueColor}`}>{value}</p>
+          {trendPct !== undefined && (
+            <span className="flex-shrink-0 max-w-full">
+              <TrendBadge pct={trendPct} tone={trendTone} />
+            </span>
+          )}
         </div>
-        <p className={`text-lg font-bold leading-none ${valueColor}`}>{value}</p>
       </div>
     </div>
   )

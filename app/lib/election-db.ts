@@ -133,6 +133,8 @@ export async function updateElection(
     image: string
     votingStartsAt: string | null
     votingEndsAt: string | null
+    registrationStartsAt: string | null
+    registrationEndsAt: string | null
     editGraceDays: number
     allowVoterPrefill: boolean
   }>
@@ -147,6 +149,14 @@ export async function updateElection(
   if (input.image !== undefined) patch.image = input.image
   if (input.votingStartsAt !== undefined) patch.voting_starts_at = input.votingStartsAt
   if (input.votingEndsAt !== undefined) patch.voting_ends_at = input.votingEndsAt
+  // Election-wide candidate registration window — distinct from each
+  // office's own form_sale_ends_at (OfficesTab). Either side left null
+  // means "indefinite" on that end — see spotix-vote's
+  // lib/election/registration-window.ts for the full precedence rules,
+  // including that registration always closes once voting starts
+  // regardless of what's set here.
+  if (input.registrationStartsAt !== undefined) patch.registration_starts_at = input.registrationStartsAt
+  if (input.registrationEndsAt !== undefined) patch.registration_ends_at = input.registrationEndsAt
   if (input.editGraceDays !== undefined) {
     if (!Number.isInteger(input.editGraceDays) || input.editGraceDays < 0) {
       throw new Error("editGraceDays must be a non-negative integer")
@@ -188,6 +198,25 @@ export async function updateElection(
     }
   }
 
+  // Same shape of check for the registration window.
+  if (patch.registration_starts_at !== undefined || patch.registration_ends_at !== undefined) {
+    let effectiveStart = patch.registration_starts_at
+    let effectiveEnd = patch.registration_ends_at
+    if (effectiveStart === undefined || effectiveEnd === undefined) {
+      const { data: current, error: fetchErr } = await supabaseAdmin
+        .from("elections")
+        .select("registration_starts_at, registration_ends_at")
+        .eq("id", electionId)
+        .maybeSingle()
+      if (fetchErr) throw new Error(fetchErr.message)
+      if (effectiveStart === undefined) effectiveStart = current?.registration_starts_at ?? null
+      if (effectiveEnd === undefined) effectiveEnd = current?.registration_ends_at ?? null
+    }
+    if (effectiveStart && effectiveEnd && new Date(effectiveEnd).getTime() <= new Date(effectiveStart).getTime()) {
+      throw new Error("Registration end must be after registration start")
+    }
+  }
+
   patch.updated_at = new Date().toISOString()
   const { data, error } = await supabaseAdmin.from("elections").update(patch).eq("id", electionId).select().single()
   if (error) throw new Error(error.message)
@@ -214,6 +243,8 @@ export async function publishResults(electionId: string) {
 export type OfficeQuestionType = "short_text" | "long_text" | "select" | "multi_select"
 
 export interface OfficeQuestionInput {
+  /** Present when this is an existing question being kept/edited; absent for a brand-new question. See updateOffice below for how this is used. */
+  id?: string
   questionText: string
   questionType: OfficeQuestionType
   options?: string[]
@@ -306,12 +337,18 @@ export async function getOffice(officeId: string) {
 
 /**
  * Updates an office's own fields and, if `questions` is provided,
- * replaces its full question set (delete-then-reinsert — simplest way
- * to keep sort_order/options/etc. consistent without diffing question
- * by question, and safe here since answers are stored by questionId on
- * the candidate row, not by position, so re-created rows for unchanged
- * questions would only matter if we tried to preserve ids, which this
- * intentionally doesn't promise across an edit).
+ * reconciles its question set against what's already there — updating
+ * in place (same row, same id) any question the caller passed back an
+ * existing `id` for, inserting fresh rows (new id) only for genuinely
+ * new questions, and deleting rows whose id is no longer present.
+ *
+ * This used to be a blanket delete-then-reinsert on every save, which
+ * silently orphaned every existing candidate's answers (stored on the
+ * candidate row keyed by questionId) the moment an organiser edited an
+ * office for ANY reason — even just the fee or seat count, since the
+ * form always resubmits its full question list. Preserving ids for
+ * unchanged/edited questions is what keeps `candidate.answers[questionId]`
+ * pointing at something that still exists.
  */
 export async function updateOffice(
   officeId: string,
@@ -341,21 +378,38 @@ export async function updateOffice(
   }
 
   if (input.questions !== undefined) {
-    const { error: delErr } = await supabaseAdmin.from("election_office_questions").delete().eq("office_id", officeId)
-    if (delErr) throw new Error(delErr.message)
+    const { data: existingRows, error: existingErr } = await supabaseAdmin
+      .from("election_office_questions")
+      .select("id")
+      .eq("office_id", officeId)
+    if (existingErr) throw new Error(existingErr.message)
+    const existingIds = new Set((existingRows ?? []).map((r) => r.id as string))
 
-    if (input.questions.length > 0) {
-      const rows = input.questions.map((q, i) => ({
-        id: genId("sp-q"),
+    const keptIds = new Set(input.questions.filter((q) => q.id && existingIds.has(q.id)).map((q) => q.id as string))
+    const idsToDelete = [...existingIds].filter((id) => !keptIds.has(id))
+
+    if (idsToDelete.length > 0) {
+      const { error: delErr } = await supabaseAdmin.from("election_office_questions").delete().in("id", idsToDelete)
+      if (delErr) throw new Error(delErr.message)
+    }
+
+    for (let i = 0; i < input.questions.length; i++) {
+      const q = input.questions[i]
+      const row = {
         office_id: officeId,
         question_text: q.questionText,
         question_type: q.questionType,
         options: q.options ?? null,
         required: q.required,
         sort_order: i,
-      }))
-      const { error: qErr } = await supabaseAdmin.from("election_office_questions").insert(rows)
-      if (qErr) throw new Error(qErr.message)
+      }
+      if (q.id && existingIds.has(q.id)) {
+        const { error: updErr } = await supabaseAdmin.from("election_office_questions").update(row).eq("id", q.id)
+        if (updErr) throw new Error(updErr.message)
+      } else {
+        const { error: insErr } = await supabaseAdmin.from("election_office_questions").insert({ id: genId("sp-q"), ...row })
+        if (insErr) throw new Error(insErr.message)
+      }
     }
   }
 }
@@ -419,6 +473,52 @@ export async function listCandidatesForElection(electionId: string) {
     .select("*")
     .eq("election_id", electionId)
     .order("created_at", { ascending: false })
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
+/**
+ * One candidate's full row, scoped to `electionId` (so one organiser
+ * can't guess another organiser's candidateId — same reasoning as
+ * getCandidateBioDataSignedUrl above), plus the office it belongs to
+ * (name + its question set) so the detail page can render answers
+ * against their actual question text without a second round trip.
+ * Returns null if the candidate doesn't exist or belongs to a
+ * different election.
+ */
+export async function getCandidateForElection(electionId: string, candidateId: string) {
+  const { data: candidate, error } = await supabaseAdmin
+    .from("election_candidates")
+    .select("*")
+    .eq("id", candidateId)
+    .eq("election_id", electionId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!candidate) return null
+
+  const { data: office, error: officeErr } = await supabaseAdmin
+    .from("election_offices")
+    .select("*, election_office_questions(*)")
+    .eq("id", candidate.office_id)
+    .maybeSingle()
+  if (officeErr) throw new Error(officeErr.message)
+
+  return { candidate, office }
+}
+
+/**
+ * Edit history for one candidate — see spotix-vote's lib/election/edit.ts
+ * (applyCandidateEdit) for where these rows get written. Each row is one
+ * saved self-edit, with `changed_fields` a {field: {from, to}} diff (or,
+ * for `answers`, a {questionId: {from, to}} diff nested under that key) —
+ * never a full before/after snapshot of the whole candidate.
+ */
+export async function listCandidateEdits(candidateId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("election_candidate_edits")
+    .select("id, edited_at, changed_fields")
+    .eq("candidate_id", candidateId)
+    .order("edited_at", { ascending: false })
   if (error) throw new Error(error.message)
   return data ?? []
 }

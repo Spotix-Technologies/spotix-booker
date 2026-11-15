@@ -1,7 +1,8 @@
 "use client"
 
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
 import {
-  X, Clock, CheckCircle2, Loader2, XCircle, Ban, Lock, KeyRound, ShieldCheck,
+  Clock, CheckCircle2, Loader2, XCircle, Ban, Lock, KeyRound, ShieldCheck,
 } from "lucide-react"
 
 interface LogEntry {
@@ -56,69 +57,61 @@ export default function PayoutTimelineModal({ record, onClose }: PayoutTimelineM
   )
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    <ResponsiveSheet
+      open
+      onClose={onClose}
+      size="lg"
+      zIndex={70}
+      title="Payout Logs"
+      description={`${record.date} · ₦${Number(record.amount).toLocaleString()}`}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <div>
-            <h3 className="text-base font-bold text-gray-900">Payout Logs</h3>
-            <p className="text-xs text-gray-400 mt-0.5">{record.date} · ₦{Number(record.amount).toLocaleString()}</p>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-4 overflow-y-auto">
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1">
-            <p className="text-xs text-gray-500">
-              Initiated by{" "}
-              <span className="font-semibold text-gray-800">
-                {record.initiatedByName || "Unknown"}
-              </span>
-              {record.initiatedByEmail ? ` (${record.initiatedByEmail})` : ""}
-            </p>
-            <p className="text-xs text-gray-500">
-              Bank:{" "}
-              <span className="font-semibold text-gray-800">{record.bankName}</span>
-              {" · "}
-              {record.accountName} · {maskAccountNumber(record.accountNumber)}
-            </p>
-          </div>
-
-          {logs.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">No log entries yet.</p>
-          ) : (
-            <div className="relative pl-6 space-y-5">
-              <div className="absolute left-[7px] top-1 bottom-1 w-px bg-gray-200" />
-              {logs.map((log, i) => (
-                <div key={i} className="relative">
-                  <div className="absolute -left-6 top-0.5 w-3.5 h-3.5 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#6b2fa5]" />
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <div className="mt-0.5">{LOG_ICON[log.type] ?? <Clock size={14} className="text-gray-400" />}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-800">{log.message}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {new Date(log.at).toLocaleString()}
-                        {log.byName ? ` · ${log.byName}` : ""}
-                      </p>
-                      {log.meta?.maskedAccountNumber && (
-                        <p className="text-xs text-gray-400">
-                          {log.meta.bankName} · {log.meta.maskedAccountNumber}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="space-y-4">
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1">
+        <p className="text-xs text-gray-500">
+          Initiated by{" "}
+          <span className="font-semibold text-gray-800">
+            {record.initiatedByName || "Unknown"}
+          </span>
+          {record.initiatedByEmail ? ` (${record.initiatedByEmail})` : ""}
+        </p>
+        <p className="text-xs text-gray-500">
+          Bank:{" "}
+          <span className="font-semibold text-gray-800">{record.bankName}</span>
+          {" · "}
+          {record.accountName} · {maskAccountNumber(record.accountNumber)}
+        </p>
       </div>
-    </div>
+
+      {logs.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-6">No log entries yet.</p>
+      ) : (
+        <div className="relative pl-6 space-y-5">
+          <div className="absolute left-[7px] top-1 bottom-1 w-px bg-gray-200" />
+          {logs.map((log, i) => (
+            <div key={i} className="relative">
+              <div className="absolute -left-6 top-0.5 w-3.5 h-3.5 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#6b2fa5]" />
+              </div>
+              <div className="flex items-start gap-2">
+                <div className="mt-0.5">{LOG_ICON[log.type] ?? <Clock size={14} className="text-gray-400" />}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-800">{log.message}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {new Date(log.at).toLocaleString()}
+                    {log.byName ? ` · ${log.byName}` : ""}
+                  </p>
+                  {log.meta?.maskedAccountNumber && (
+                    <p className="text-xs text-gray-400">
+                      {log.meta.bankName} · {log.meta.maskedAccountNumber}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      </div>
+    </ResponsiveSheet>
   )
 }

@@ -1,18 +1,24 @@
 "use client"
 
+import { ResponsiveSheet } from "@/components/ui/responsive-sheet"
+
 interface ScannerSelectionDialogProps {
   onSelectLibrary: (library: "html5qrcode" | "zxing") => void
 }
 
 export default function ScannerSelectionDialog({ onSelectLibrary }: ScannerSelectionDialogProps) {
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 space-y-6 animate-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="space-y-3 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#6b2fa5]/10 rounded-full mb-2">
+    <ResponsiveSheet
+      open
+      onClose={() => {}}
+      dismissible={false}
+      size="sm"
+      title="Choose Scanner Library"
+      description="Select the QR code scanner that works best for your device"
+      icon={
+          <div className="flex items-center justify-center w-11 h-11 bg-[#6b2fa5]/10 rounded-xl">
             <svg 
-              className="w-8 h-8 text-[#6b2fa5]" 
+              className="w-5 h-5 text-[#6b2fa5]" 
               fill="none" 
               stroke="currentColor" 
               viewBox="0 0 24 24"
@@ -25,13 +31,13 @@ export default function ScannerSelectionDialog({ onSelectLibrary }: ScannerSelec
               />
             </svg>
           </div>
-          <h3 className="text-2xl font-bold text-gray-900">Choose Scanner Library</h3>
-          <p className="text-gray-600">
-            Select the QR code scanner that works best for your device
-          </p>
-        </div>
-
-        {/* Scanner Options */}
+      }
+      footer={
+        <p className="text-xs text-gray-500 text-center leading-relaxed">
+          You can change this selection later by clicking "Change Scanner"
+        </p>
+      }
+    >
         <div className="space-y-4">
           <button
             onClick={() => onSelectLibrary("html5qrcode")}
@@ -107,14 +113,6 @@ export default function ScannerSelectionDialog({ onSelectLibrary }: ScannerSelec
             </span>
           </button>
         </div>
-
-        {/* Footer Note */}
-        <div className="pt-2">
-          <p className="text-xs text-gray-500 text-center leading-relaxed">
-            You can change this selection later by clicking "Change Scanner"
-          </p>
-        </div>
-      </div>
-    </div>
+    </ResponsiveSheet>
   )
 }

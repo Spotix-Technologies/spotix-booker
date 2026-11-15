@@ -15,7 +15,8 @@
  */
 
 import { useState } from "react"
-import { ShieldCheck, KeyRound, Loader2, AlertCircle, X } from "lucide-react"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
+import { ShieldCheck, KeyRound, Loader2, AlertCircle } from "lucide-react"
 
 interface VaultKeyEnterDialogProps {
   payoutIds: string[]
@@ -58,31 +59,21 @@ export default function VaultKeyEnterDialog({ payoutIds, amount, dates, onClose,
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={(e) => { if (e.target === e.currentTarget && !submitting) onClose() }}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <ShieldCheck size={16} className="text-[#6b2fa5]" />
-            </div>
-            <h3 className="text-base font-bold text-gray-900">One more step</h3>
-          </div>
-          <button onClick={onClose} disabled={submitting} className="text-gray-400 hover:text-gray-700">
-            <X size={18} />
-          </button>
+    <ResponsiveSheet
+      open
+      onClose={onClose}
+      dismissible={!submitting}
+      size="sm"
+      zIndex={70}
+      title="One more step"
+      icon={
+        <div className="p-2 bg-purple-100 rounded-lg">
+          <ShieldCheck size={16} className="text-[#6b2fa5]" />
         </div>
-
-        <p className="text-sm text-gray-600 leading-relaxed">
-          As you have just made a payout request for{" "}
-          <span className="font-semibold text-gray-900">{dayLabel}</span> (₦
-          {Number(amount).toLocaleString()}), you still need to enter your OWN Vault Key.
-        </p>
-
-        {mode === "prompt" ? (
-          <div className="flex gap-3">
+      }
+      footer={
+        mode === "prompt" ? (
+          <div className="flex flex-col-reverse sm:flex-row gap-3">
             <button
               onClick={onClose}
               disabled={submitting}
@@ -98,6 +89,25 @@ export default function VaultKeyEnterDialog({ payoutIds, amount, dates, onClose,
             </button>
           </div>
         ) : (
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || !key}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#6b2fa5] text-white hover:bg-[#5a2589] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {submitting ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={14} />}
+            {submitting ? "Verifying..." : "Submit Key"}
+          </button>
+        )
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600 leading-relaxed">
+          As you have just made a payout request for{" "}
+          <span className="font-semibold text-gray-900">{dayLabel}</span> (₦
+          {Number(amount).toLocaleString()}), you still need to enter your OWN Vault Key.
+        </p>
+
+        {mode === "enter" && (
           <>
             <input
               type="password"
@@ -106,7 +116,7 @@ export default function VaultKeyEnterDialog({ payoutIds, amount, dates, onClose,
               value={key}
               onChange={(e) => setKey(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && key) handleSubmit() }}
-              className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#6b2fa5]"
+              className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#6b2fa5]"
             />
 
             {error && (
@@ -116,21 +126,12 @@ export default function VaultKeyEnterDialog({ payoutIds, amount, dates, onClose,
               </div>
             )}
 
-            <button
-              onClick={handleSubmit}
-              disabled={submitting || !key}
-              className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#6b2fa5] text-white hover:bg-[#5a2589] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {submitting ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={14} />}
-              {submitting ? "Verifying..." : "Submit Key"}
-            </button>
-
             <p className="text-xs text-gray-400 text-center">
               You can also do this later from the Vault sign-off section at the top of this page.
             </p>
           </>
         )}
       </div>
-    </div>
+    </ResponsiveSheet>
   )
 }

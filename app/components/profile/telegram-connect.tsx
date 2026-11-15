@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { authFetch } from "@/lib/auth-client"
 import { Loader2, CheckCircle2, Copy, Check, Unlink, AlertTriangle } from "lucide-react"
 import Image from "next/image"
+import { ResponsiveSheet } from "@/components/ui/responsive-sheet"
 
 interface TelegramStatus {
   connected: boolean
@@ -151,52 +152,46 @@ export function TelegramConnect({ userId }: TelegramConnectProps) {
     return (
       <>
         {/* Disconnect confirmation dialog */}
-        {showDisconnectDialog && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <div
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={() => !disconnecting && setShowDisconnectDialog(false)}
-            />
-            {/* Dialog */}
-            <div className="relative z-10 w-full max-w-sm rounded-2xl border border-border bg-background shadow-2xl p-6 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="shrink-0 w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center">
-                  <AlertTriangle className="w-5 h-5 text-destructive" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">Disconnect Telegram</h3>
-                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                    You will be disconnected from the bot and will no longer receive real-time
-                    alerts or manage payouts via Telegram.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => setShowDisconnectDialog(false)}
-                  disabled={disconnecting}
-                  className="flex-1 px-4 py-2 rounded-xl border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDisconnect}
-                  disabled={disconnecting}
-                  className="flex-1 px-4 py-2 rounded-xl bg-destructive hover:bg-destructive/90 text-white text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {disconnecting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Unlink className="w-4 h-4" />
-                  )}
-                  {disconnecting ? "Disconnecting…" : "Disconnect"}
-                </button>
-              </div>
+        <ResponsiveSheet
+          open={showDisconnectDialog}
+          onClose={() => setShowDisconnectDialog(false)}
+          role="alertdialog"
+          size="sm"
+          dismissible={!disconnecting}
+          title="Disconnect Telegram"
+          description="You will be disconnected from the bot and will no longer receive real-time alerts or manage payouts via Telegram."
+          icon={
+            <div className="shrink-0 w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
             </div>
+          }
+          bodyClassName="p-0"
+          footer={
+          <div className="flex flex-col-reverse sm:flex-row gap-2">
+            <button
+              onClick={() => setShowDisconnectDialog(false)}
+              disabled={disconnecting}
+              className="flex-1 px-4 py-2 rounded-xl border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="flex-1 px-4 py-2 rounded-xl bg-destructive hover:bg-destructive/90 text-white text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {disconnecting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Unlink className="w-4 h-4" />
+              )}
+              {disconnecting ? "Disconnecting…" : "Disconnect"}
+            </button>
           </div>
-        )}
+          }
+        >
+          <></>
+        </ResponsiveSheet>
 
         {/* Connected card */}
         <div className="rounded-2xl border border-green-500/20 bg-green-500/5 p-4">

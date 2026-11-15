@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 
 export function CandidatesTab({ electionId, offices }: { electionId: string; offices: any[] }) {
   const [candidates, setCandidates] = useState<any[]>([])
@@ -51,23 +52,33 @@ export function CandidatesTab({ electionId, offices }: { electionId: string; off
             <ul className="mt-2 flex flex-col gap-2">
               {officeCandidates.map((c) => (
                 <li key={c.id} className="rounded-xl border border-gray-200 p-3">
-                  <button
-                    onClick={() => setExpanded(expanded === c.id ? null : c.id)}
-                    className="flex w-full items-center gap-3 text-left"
-                  >
-                    {c.photo_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={c.photo_url} alt={c.full_name} className="h-10 w-10 rounded-full object-cover" />
-                    )}
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{c.full_name}</p>
-                      <p className="text-xs text-gray-500">
-                        {c.email} · {c.phone}
-                      </p>
-                    </div>
-                    <span className="text-xs text-gray-400">{c.form_reference ? "Paid" : "Free"}</span>
-                    <span className="text-sm font-medium text-gray-700">{c.vote_count} votes</span>
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setExpanded(expanded === c.id ? null : c.id)}
+                      className="flex flex-1 items-center gap-3 text-left"
+                    >
+                      {c.photo_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={c.photo_url} alt={c.full_name} className="h-10 w-10 rounded-full object-cover" />
+                      )}
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">{c.full_name}</p>
+                        <p className="text-xs text-gray-500">
+                          {c.email} · {c.phone}
+                        </p>
+                      </div>
+                      <span className="text-xs text-gray-400">{c.form_reference ? "Paid" : "Free"}</span>
+                      <span className="text-sm font-medium text-gray-700">{c.vote_count} votes</span>
+                    </button>
+                    <Link
+                      href={`/elections/${electionId}/candidates/${c.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:border-[#6b2fa5] hover:text-[#6b2fa5]"
+                    >
+                      View details
+                    </Link>
+                  </div>
 
                   {expanded === c.id && (
                     <CandidateDetail electionId={electionId} candidate={c} questions={questions} />

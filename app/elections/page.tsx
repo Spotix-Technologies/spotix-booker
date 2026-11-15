@@ -10,6 +10,7 @@
 import { useEffect, useState, type MouseEvent } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { ResponsiveSheet } from "@/components/ui/responsive-sheet"
 import { Skeleton } from "./components/Skeleton"
 import { useUnsavedChangesWarning } from "@/hooks/useUnsavedChangesWarning"
 import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog"
@@ -178,66 +179,70 @@ function CreateElectionDialog({ onClose, onCreated }: { onClose: () => void; onC
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6">
+    <>
       <UnsavedChangesDialog open={showConfirmDialog} onConfirm={confirmLeave} onCancel={cancelLeave} />
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-gray-900">New election</h2>
-
-        <div className="mt-4 flex flex-col gap-3">
-          <input
-            placeholder="Election name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
-          />
-          <textarea
-            placeholder="Description (optional)"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
-          />
-          <label className="text-xs text-gray-500">
-            Voting starts
-            <input
-              type="datetime-local"
-              value={votingStartsAt}
-              onChange={(e) => setVotingStartsAt(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
-            />
-          </label>
-          <label className="text-xs text-gray-500">
-            Voting ends
-            <input
-              type="datetime-local"
-              value={votingEndsAt}
-              onChange={(e) => setVotingEndsAt(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
-            />
-          </label>
-          <label className="text-xs text-gray-500">
-            Candidate edit window (days after submitting, 0 = no edits allowed)
-            <input
-              type="number"
-              min={0}
-              value={editGraceDays}
-              onChange={(e) => setEditGraceDays(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
-            />
-          </label>
-        </div>
-
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => guardNavigation(onClose)()}>
-            Cancel
-          </Button>
-          <Button onClick={handleCreate} disabled={saving || !name.trim()}>
-            {saving ? "Creating…" : "Create"}
-          </Button>
-        </div>
-      </div>
+      <ResponsiveSheet
+        open
+        onClose={() => guardNavigation(onClose)()}
+        title="New election"
+        size="md"
+        footer={
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <Button variant="ghost" onClick={() => guardNavigation(onClose)()}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreate} disabled={saving || !name.trim()}>
+              {saving ? "Creating…" : "Create"}
+            </Button>
+          </div>
+        }
+      >
+    <div className="flex flex-col gap-3">
+      <input
+        placeholder="Election name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
+      />
+      <textarea
+        placeholder="Description (optional)"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        rows={3}
+        className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
+      />
+      <label className="text-xs text-gray-500">
+        Voting starts
+        <input
+          type="datetime-local"
+          value={votingStartsAt}
+          onChange={(e) => setVotingStartsAt(e.target.value)}
+          className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
+        />
+      </label>
+      <label className="text-xs text-gray-500">
+        Voting ends
+        <input
+          type="datetime-local"
+          value={votingEndsAt}
+          onChange={(e) => setVotingEndsAt(e.target.value)}
+          className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
+        />
+      </label>
+      <label className="text-xs text-gray-500">
+        Candidate edit window (days after submitting, 0 = no edits allowed)
+        <input
+          type="number"
+          min={0}
+          value={editGraceDays}
+          onChange={(e) => setEditGraceDays(e.target.value)}
+          className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
+        />
+      </label>
     </div>
+
+    {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      </ResponsiveSheet>
+    </>
   )
 }

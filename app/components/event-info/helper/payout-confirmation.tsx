@@ -1,6 +1,7 @@
 "use client"
 
-import { X, Loader2, AlertCircle, Star } from "lucide-react"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
+import { Loader2, AlertCircle, Star } from "lucide-react"
 import { useState, useRef } from "react"
 
 interface DailyTransaction {
@@ -138,37 +139,44 @@ export default function PayoutConfirmation({
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 50,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "rgba(0,0,0,0.5)",
-        backdropFilter: "blur(5px)",
-        WebkitBackdropFilter: "blur(5px)",
-        padding: "0 16px",
-        overflow: "auto",
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !processing) onClose()
-      }}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">Request Payout</h3>
+    <ResponsiveSheet
+      open
+      onClose={onClose}
+      dismissible={!processing}
+      size="md"
+      zIndex={70}
+      title="Request Payout"
+      footer={
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
           <button
             onClick={onClose}
             disabled={processing}
-            className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg transition-colors disabled:opacity-40"
+            className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
-            <X size={18} />
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={!selectedMethod || processing}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
+              selectedMethod && !processing
+                ? "bg-[#6b2fa5] text-white hover:bg-[#5a2589]"
+                : "bg-gray-100 text-gray-400 cursor-not-allowed"
+            }`}
+          >
+            {processing ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Processing...
+              </>
+            ) : (
+              "Confirm Payout"
+            )}
           </button>
         </div>
-
+      }
+    >
+      <div className="space-y-5">
         {/* Transaction Summary */}
         <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 space-y-2">
           <p className="text-xs text-purple-600 font-semibold uppercase tracking-wider">
@@ -248,36 +256,7 @@ export default function PayoutConfirmation({
             </div>
           )}
         </div>
-
-        {/* Actions */}
-        <div className="flex gap-3 pt-1">
-          <button
-            onClick={onClose}
-            disabled={processing}
-            className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={!selectedMethod || processing}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
-              selectedMethod && !processing
-                ? "bg-[#6b2fa5] text-white hover:bg-[#5a2589]"
-                : "bg-gray-100 text-gray-400 cursor-not-allowed"
-            }`}
-          >
-            {processing ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Processing...
-              </>
-            ) : (
-              "Confirm Payout"
-            )}
-          </button>
-        </div>
       </div>
-    </div>
+    </ResponsiveSheet>
   )
 }

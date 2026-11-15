@@ -16,12 +16,12 @@
  * also what gets checked/submitted, not the raw text.
  */
 
-import { useState, useEffect, useRef } from "react"
-import { Link2, Loader2, CheckCircle, AlertCircle, X, Pencil } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Link2, Loader2, CheckCircle, AlertCircle, Pencil } from "lucide-react"
 import { authFetch } from "@/lib/auth-client"
 import { slugify, isValidSlug, SLUG_RULES_HINT } from "@/lib/slug"
-
-type SlugStatus = "idle" | "checking" | "available" | "taken" | "invalid"
+import { useSlugAvailability } from "@/hooks/useSlugAvailability"
+import { ResponsiveSheet } from "@/components/ui/responsive-sheet"
 
 interface CreateEventSlugProps {
   open: boolean
@@ -45,56 +45,23 @@ export default function CreateEventSlug({
   const [rawInput, setRawInput] = useState("")
   // What it turns into — this is what's previewed, checked, and submitted.
   const preview = slugify(rawInput)
-  const [slugStatus, setSlugStatus] = useState<SlugStatus>("idle")
+  // Server is only asked 5s after the last keystroke (hooks/useSlugAvailability.ts).
+  const { status: slugStatus, checkNow: checkSlugNow } = useSlugAvailability(preview, { enabled: open })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [closing, setClosing] = useState(false)
-  const slugCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Reset to a blank slate each time it's reopened.
   useEffect(() => {
     if (open) {
       setRawInput("")
-      setSlugStatus("idle")
       setError(null)
       setSubmitting(false)
-      setClosing(false)
     }
   }, [open])
 
-  // Debounced live availability check against the preview, mirrored from
-  // create-one-time-event.tsx.
-  useEffect(() => {
-    if (slugCheckTimer.current) clearTimeout(slugCheckTimer.current)
-    if (!preview) {
-      setSlugStatus("idle")
-      return
-    }
-    if (!isValidSlug(preview)) {
-      setSlugStatus("invalid")
-      return
-    }
-    setSlugStatus("checking")
-    slugCheckTimer.current = setTimeout(async () => {
-      try {
-        const res = await authFetch(`/api/event/slug-check?slug=${encodeURIComponent(preview)}`)
-        const json = await res.json()
-        setSlugStatus(json.available ? "available" : "taken")
-      } catch {
-        setSlugStatus("idle")
-      }
-    }, 500)
-    return () => {
-      if (slugCheckTimer.current) clearTimeout(slugCheckTimer.current)
-    }
-  }, [preview])
-
-  if (!open) return null
-
   function handleDismiss() {
     if (submitting) return
-    setClosing(true)
-    setTimeout(onClose, 200)
+    onClose()
   }
 
   async function handleCreate() {
@@ -118,38 +85,38 @@ export default function CreateEventSlug({
   }
 
   return (
-    <div
-      className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end justify-center transition-opacity duration-200 ${
-        closing ? "opacity-0" : "opacity-100 animate-in fade-in"
-      }`}
-      onClick={(e) => { if (e.target === e.currentTarget) handleDismiss() }}
-    >
-      <div
-        className={`w-full max-w-md bg-white rounded-t-3xl shadow-2xl px-5 pt-3 pb-6 sm:pb-6 space-y-4 ${
-          closing
-            ? "animate-out slide-out-to-bottom duration-200"
-            : "animate-in slide-in-from-bottom duration-300"
-        }`}
-        style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Drag handle */}
-        <div className="flex justify-center">
-          <div className="w-10 h-1.5 rounded-full bg-gray-200" />
+    <ResponsiveSheet
+      open={open}
+      onClose={handleDismiss}
+      size="md"
+      dismissible={!submitting}
+      icon={
+        <div className="p-2 bg-[#6b2fa5]/10 rounded-lg">
+          <Link2 size={16} className="text-[#6b2fa5]" />
         </div>
-
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-[#6b2fa5]/10 rounded-lg">
-              <Link2 size={16} className="text-[#6b2fa5]" />
-            </div>
-            <h3 className="text-base font-bold text-gray-900">Create your event link</h3>
-          </div>
-          <button onClick={handleDismiss} disabled={submitting} className="text-gray-400 hover:text-gray-700 flex-shrink-0">
-            <X size={18} />
+      }
+      title="Create your event link"
+      footer={
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
+          <button
+            onClick={handleDismiss}
+            disabled={submitting}
+            className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            Maybe later
+          </button>
+          <button
+            onClick={handleCreate}
+            disabled={submitting || !preview || slugStatus !== "available"}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[#6b2fa5] text-white hover:bg-[#5a2589] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {submitting ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={14} />}
+            {submitting ? "Creating..." : "Create link"}
           </button>
         </div>
-
+      }
+    >
+      <div className="space-y-4">
         <div className="flex justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/shortLink.svg" alt="" className="h-28 w-auto" />
@@ -173,7 +140,7 @@ export default function CreateEventSlug({
                 placeholder="your event name"
                 value={rawInput}
                 onChange={(e) => setRawInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && slugStatus === "available") handleCreate() }}
+                onKeyDown={(e) => { if (e.key === "Enter") { if (slugStatus === "available") handleCreate(); else checkSlugNow() } }}
                 disabled={submitting}
                 className="w-full pl-9 pr-9 py-3 text-slate-900 placeholder:text-slate-400 outline-none disabled:opacity-50"
               />
@@ -203,8 +170,15 @@ export default function CreateEventSlug({
           <p className={`text-xs mt-1.5 ${slugStatus === "taken" || slugStatus === "invalid" ? "text-red-600" : "text-slate-500"}`}>
             {slugStatus === "taken" && "That link is already in use. Try something else."}
             {slugStatus === "invalid" && SLUG_RULES_HINT}
-            {(slugStatus === "idle" || slugStatus === "checking" || slugStatus === "available") &&
+            {slugStatus === "pending" && "We'll check if it's available once you stop typing. "}
+            {slugStatus === "checking" && "Checking availability… "}
+            {(slugStatus === "idle" || slugStatus === "available") &&
               "Slugs may not even be the exact name of your event, just make sure it’s something you’ll remember and easy to share."}
+            {slugStatus === "pending" && (
+              <button type="button" onClick={checkSlugNow} className="font-semibold text-[#6b2fa5] hover:underline">
+                Check now
+              </button>
+            )}
           </p>
         </div>
 
@@ -214,25 +188,7 @@ export default function CreateEventSlug({
             <p className="text-xs text-red-700">{error}</p>
           </div>
         )}
-
-        <div className="flex gap-3">
-          <button
-            onClick={handleDismiss}
-            disabled={submitting}
-            className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            Maybe later
-          </button>
-          <button
-            onClick={handleCreate}
-            disabled={submitting || !preview || slugStatus === "invalid" || slugStatus === "taken" || slugStatus === "checking"}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[#6b2fa5] text-white hover:bg-[#5a2589] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {submitting ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={14} />}
-            {submitting ? "Creating..." : "Create link"}
-          </button>
-        </div>
       </div>
-    </div>
+    </ResponsiveSheet>
   )
 }

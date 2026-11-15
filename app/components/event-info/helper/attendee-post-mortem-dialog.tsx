@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { X, FileBarChart2, Loader2, Mail, Download, AlertCircle, CheckCircle2, Clock, RotateCcw } from "lucide-react"
+import { FileBarChart2, Loader2, Mail, Download, AlertCircle, CheckCircle2, Clock, RotateCcw } from "lucide-react"
 import { authFetch } from "@/lib/auth-client"
+import { ResponsiveSheet } from "@/components/ui/responsive-sheet"
 
 type Phase = "checking" | "not-ended" | "intro" | "processing" | "ready" | "failed"
 
@@ -142,121 +143,21 @@ export default function AttendeePostMortemDialog({
     onClose()
   }
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={handleClose}>
-      <div
-        className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#6b2fa5]/10 flex items-center justify-center">
-              <FileBarChart2 size={20} className="text-[#6b2fa5]" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Attendee Post Mortem</h3>
-              <p className="text-xs text-slate-500 truncate max-w-[220px]">{eventName}</p>
-            </div>
-          </div>
-          <button onClick={handleClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
-            <X size={18} className="text-slate-500" />
-          </button>
+    <ResponsiveSheet
+      open={open}
+      onClose={handleClose}
+      size="md"
+      dismissible={!submitting}
+      icon={
+        <div className="w-10 h-10 rounded-xl bg-[#6b2fa5]/10 flex items-center justify-center">
+          <FileBarChart2 size={20} className="text-[#6b2fa5]" />
         </div>
-
-        <div className="px-6 py-6">
-          {phase === "checking" && (
-            <div className="flex flex-col items-center gap-3 py-8 text-slate-400">
-              <Loader2 size={24} className="animate-spin" />
-              <p className="text-sm">Checking report status…</p>
-            </div>
-          )}
-
-          {phase === "not-ended" && (
-            <div className="flex flex-col items-center gap-3 py-6 text-center">
-              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
-                <Clock size={22} className="text-amber-600" />
-              </div>
-              <p className="text-sm font-semibold text-slate-800">This event hasn't ended yet</p>
-              <p className="text-sm text-slate-500">
-                The post mortem report becomes available once the event's end date and time have passed.
-              </p>
-            </div>
-          )}
-
-          {phase === "intro" && (
-            <div className="space-y-4">
-              <p className="text-sm text-slate-600 leading-relaxed">
-                We'll build a detailed attendee behaviour report for this event.
-              </p>
-              <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl p-3.5">
-                <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-800 leading-relaxed">
-                  This report is only ever computed <strong>once</strong> per event. Once generated, you'll always
-                  download the same report. It can't be regenerated.
-                </p>
-              </div>
-              {error && (
-                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
-                  <AlertCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-red-700">{error}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {phase === "processing" && (
-            <div className="flex flex-col items-center gap-4 py-6 text-center">
-              <Loader2 size={30} className="animate-spin text-[#6b2fa5]" />
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Please hold, we are computing the post mortem…</p>
-                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                  This can take a little while for larger events. Feel free to close this and carry on —
-                  we'll email you{requesterEmail ? <> at <strong>{requesterEmail}</strong></> : ""} as soon as it's
-                  ready.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                <Mail size={14} /> You'll get an email when the report is ready
-              </div>
-            </div>
-          )}
-
-          {phase === "ready" && (
-            <div className="flex flex-col items-center gap-4 py-4 text-center">
-              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle2 size={24} className="text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Your post mortem is ready</p>
-                <p className="text-sm text-slate-500 mt-1">
-                  This report was generated once and won't change. Download it whenever you like.
-                </p>
-                {(generatedByName || generatedAt) && (
-                  <p className="text-xs text-slate-400 mt-2">
-                    Generated{generatedByName ? <> by <strong className="text-slate-500">{generatedByName}</strong></> : ""}
-                    {generatedAt ? <> on {new Date(generatedAt).toLocaleString("en-NG", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}</> : ""}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {phase === "failed" && (
-            <div className="flex flex-col items-center gap-4 py-4 text-center">
-              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-                <AlertCircle size={24} className="text-red-600" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Report generation failed</p>
-                <p className="text-sm text-slate-500 mt-1">{error ?? "Something went wrong."}</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50">
+      }
+      title="Attendee Post Mortem"
+      description={<span className="block truncate">{eventName}</span>}
+      footer={
+        <div className="flex flex-col-reverse sm:flex-row items-stretch gap-3">
           {phase === "intro" && (
             <>
               <button
@@ -331,7 +232,96 @@ export default function AttendeePostMortemDialog({
             </>
           )}
         </div>
-      </div>
-    </div>
+      }
+    >
+      {phase === "checking" && (
+        <div className="flex flex-col items-center gap-3 py-8 text-slate-400">
+          <Loader2 size={24} className="animate-spin" />
+          <p className="text-sm">Checking report status…</p>
+        </div>
+      )}
+
+      {phase === "not-ended" && (
+        <div className="flex flex-col items-center gap-3 py-6 text-center">
+          <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+            <Clock size={22} className="text-amber-600" />
+          </div>
+          <p className="text-sm font-semibold text-slate-800">This event hasn't ended yet</p>
+          <p className="text-sm text-slate-500">
+            The post mortem report becomes available once the event's end date and time have passed.
+          </p>
+        </div>
+      )}
+
+      {phase === "intro" && (
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600 leading-relaxed">
+            We'll build a detailed attendee behaviour report for this event.
+          </p>
+          <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl p-3.5">
+            <AlertCircle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-800 leading-relaxed">
+              This report is only ever computed <strong>once</strong> per event. Once generated, you'll always
+              download the same report. It can't be regenerated.
+            </p>
+          </div>
+          {error && (
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3">
+              <AlertCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-red-700">{error}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {phase === "processing" && (
+        <div className="flex flex-col items-center gap-4 py-6 text-center">
+          <Loader2 size={30} className="animate-spin text-[#6b2fa5]" />
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Please hold, we are computing the post mortem…</p>
+            <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+              This can take a little while for larger events. Feel free to close this and carry on —
+              we'll email you{requesterEmail ? <> at <strong>{requesterEmail}</strong></> : ""} as soon as it's
+              ready.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <Mail size={14} /> You'll get an email when the report is ready
+          </div>
+        </div>
+      )}
+
+      {phase === "ready" && (
+        <div className="flex flex-col items-center gap-4 py-4 text-center">
+          <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+            <CheckCircle2 size={24} className="text-green-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Your post mortem is ready</p>
+            <p className="text-sm text-slate-500 mt-1">
+              This report was generated once and won't change. Download it whenever you like.
+            </p>
+            {(generatedByName || generatedAt) && (
+              <p className="text-xs text-slate-400 mt-2">
+                Generated{generatedByName ? <> by <strong className="text-slate-500">{generatedByName}</strong></> : ""}
+                {generatedAt ? <> on {new Date(generatedAt).toLocaleString("en-NG", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}</> : ""}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {phase === "failed" && (
+        <div className="flex flex-col items-center gap-4 py-4 text-center">
+          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+            <AlertCircle size={24} className="text-red-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Report generation failed</p>
+            <p className="text-sm text-slate-500 mt-1">{error ?? "Something went wrong."}</p>
+          </div>
+        </div>
+      )}
+    </ResponsiveSheet>
   )
 }

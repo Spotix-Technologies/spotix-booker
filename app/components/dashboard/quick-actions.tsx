@@ -29,8 +29,8 @@ const actions = [
     description: "View and manage polls",
     href: "/polls",
     accent: "bg-white border border-slate-200",
-    iconBg: "bg-emerald-50",
-    iconColor: "text-emerald-600",
+    iconBg: "bg-[#6b2fa5]/10",
+    iconColor: "text-[#6b2fa5]",
     textColor: "text-slate-800",
   },
   {
@@ -39,8 +39,8 @@ const actions = [
     description: "View and manage elections",
     href: "/elections",
     accent: "bg-white border border-slate-200",
-    iconBg: "bg-blue-50",
-    iconColor: "text-blue-600",
+    iconBg: "bg-[#6b2fa5]/10",
+    iconColor: "text-[#6b2fa5]",
     textColor: "text-slate-800",
   },
 ]

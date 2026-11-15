@@ -18,10 +18,13 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { ResponsiveSheet } from "@/components/ui/responsive-sheet"
 
 type QuestionType = "short_text" | "long_text" | "select" | "multi_select"
 
 interface Question {
+  /** Present for an existing question (its election_office_questions.id) so updateOffice can update it in place instead of recreating it — see that function's comment for why this matters. Absent for a question just added in this dialog. */
+  id?: string
   questionText: string
   questionType: QuestionType
   options?: string[]
@@ -233,6 +236,7 @@ function questionsFromOffice(office: any | undefined): Question[] {
   return [...office.election_office_questions]
     .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
     .map((q: any) => ({
+      id: q.id,
       questionText: q.question_text,
       questionType: q.question_type,
       options: q.options ?? [],
@@ -336,149 +340,14 @@ function OfficeFormDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6 py-8 overflow-y-auto">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-gray-900">{isEdit ? "Edit office" : "Add office"}</h2>
-
-        <div className="mt-4 flex flex-col gap-3">
-          <input
-            placeholder="Office name, e.g. President"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
-          />
-          <div className="flex gap-3">
-            <label className="flex-1 text-xs text-gray-500">
-              Form fee (₦, 0 = free)
-              <input
-                type="number"
-                min={0}
-                value={formFee}
-                onChange={(e) => setFormFee(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
-              />
-            </label>
-            <label className="flex-1 text-xs text-gray-500">
-              Seats available
-              <input
-                type="number"
-                min={1}
-                value={seatsAvailable}
-                onChange={(e) => setSeatsAvailable(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
-              />
-            </label>
-          </div>
-
-          <div className="rounded-xl border border-gray-200 p-3">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-              <input type="checkbox" checked={bioDataRequired} onChange={(e) => setBioDataRequired(e.target.checked)} />
-              Require a bio data upload to contest
-            </label>
-            <p className="mt-1 text-xs text-gray-500">
-              Candidates will upload a document to verify they qualify (e.g. a matric ID, admission letter). Spotix
-              forwards it to you after the election ends and deletes it from our end.
-            </p>
-            {bioDataRequired && (
-              <input
-                placeholder='What should they upload? e.g. "Upload your matric ID card"'
-                value={bioDataLabel}
-                onChange={(e) => setBioDataLabel(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
-              />
-            )}
-          </div>
-
-          <div className="rounded-xl border border-gray-200 p-3">
-            <label className="text-sm font-medium text-gray-700">
-              Form sale end date <span className="font-normal text-gray-400">(optional)</span>
-            </label>
-            <p className="mt-1 text-xs text-gray-500">
-              After this date and time, candidates can no longer register for this office. Leave blank to sell
-              forms with no deadline.
-            </p>
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                type="datetime-local"
-                value={formSaleEndsAt}
-                onChange={(e) => setFormSaleEndsAt(e.target.value)}
-                className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
-              />
-              {formSaleEndsAt && (
-                <button type="button" onClick={() => setFormSaleEndsAt("")} className="text-xs text-red-500">
-                  Clear
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-gray-600">Candidate questions</p>
-              <button onClick={addQuestion} className="text-xs text-[#6b2fa5]">
-                + Add question
-              </button>
-            </div>
-            <div className="mt-2 flex flex-col gap-3">
-              {questions.map((q, i) => (
-                <div key={i} className="rounded-xl border border-gray-200 p-3">
-                  <div className="flex items-center gap-2">
-                    <input
-                      placeholder="Question text"
-                      value={q.questionText}
-                      onChange={(e) => updateQuestion(i, { questionText: e.target.value })}
-                      className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
-                    />
-                    <select
-                      value={q.questionType}
-                      onChange={(e) => updateQuestion(i, { questionType: e.target.value as QuestionType })}
-                      className="rounded-xl border border-gray-300 px-2 py-2 text-xs"
-                    >
-                      {(Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]).map((t) => (
-                        <option key={t} value={t}>
-                          {QUESTION_TYPE_LABELS[t]}
-                        </option>
-                      ))}
-                    </select>
-                    <button onClick={() => removeQuestion(i)} className="shrink-0 text-xs text-red-500">
-                      Remove
-                    </button>
-                  </div>
-
-                  {CHOICE_TYPES.includes(q.questionType) && (
-                    <div className="mt-2 flex flex-col gap-1.5 pl-1">
-                      {(q.options ?? []).map((opt, optIdx) => (
-                        <div key={optIdx} className="flex items-center gap-2">
-                          <input
-                            placeholder={`Option ${optIdx + 1}`}
-                            value={opt}
-                            onChange={(e) => updateOption(i, optIdx, e.target.value)}
-                            className="flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs outline-none focus:border-[#6b2fa5]"
-                          />
-                          <button onClick={() => removeOption(i, optIdx)} className="text-xs text-red-500">
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                      <button onClick={() => addOption(i)} className="self-start text-xs text-[#6b2fa5]">
-                        + Add option
-                      </button>
-                    </div>
-                  )}
-
-                  <label className="mt-2 flex items-center gap-1 text-xs text-gray-500">
-                    <input type="checkbox" checked={q.required} onChange={(e) => updateQuestion(i, { required: e.target.checked })} />
-                    Required
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-
-        <div className="mt-5 flex justify-end gap-2">
+    <ResponsiveSheet
+      open
+      onClose={onClose}
+      title={isEdit ? "Edit office" : "Add office"}
+      size="md"
+      dismissible={!saving}
+      footer={
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
@@ -486,7 +355,145 @@ function OfficeFormDialog({
             {saving ? "Saving…" : isEdit ? "Save changes" : "Create office"}
           </Button>
         </div>
+      }
+    >
+    <div className="flex flex-col gap-3">
+      <input
+        placeholder="Office name, e.g. President"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        className="rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
+      />
+      <div className="flex flex-col sm:flex-row gap-3">
+        <label className="flex-1 text-xs text-gray-500">
+          Form fee (₦, 0 = free)
+          <input
+            type="number"
+            min={0}
+            value={formFee}
+            onChange={(e) => setFormFee(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
+          />
+        </label>
+        <label className="flex-1 text-xs text-gray-500">
+          Seats available
+          <input
+            type="number"
+            min={1}
+            value={seatsAvailable}
+            onChange={(e) => setSeatsAvailable(e.target.value)}
+            className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
+          />
+        </label>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 p-3">
+        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <input type="checkbox" checked={bioDataRequired} onChange={(e) => setBioDataRequired(e.target.checked)} />
+          Require a bio data upload to contest
+        </label>
+        <p className="mt-1 text-xs text-gray-500">
+          Candidates will upload a document to verify they qualify (e.g. a matric ID, admission letter). Spotix
+          forwards it to you after the election ends and deletes it from our end.
+        </p>
+        {bioDataRequired && (
+          <input
+            placeholder='What should they upload? e.g. "Upload your matric ID card"'
+            value={bioDataLabel}
+            onChange={(e) => setBioDataLabel(e.target.value)}
+            className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
+          />
+        )}
+      </div>
+
+      <div className="rounded-xl border border-gray-200 p-3">
+        <label className="text-sm font-medium text-gray-700">
+          Form sale end date <span className="font-normal text-gray-400">(optional)</span>
+        </label>
+        <p className="mt-1 text-xs text-gray-500">
+          After this date and time, candidates can no longer register for this office. Leave blank to sell
+          forms with no deadline.
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="datetime-local"
+            value={formSaleEndsAt}
+            onChange={(e) => setFormSaleEndsAt(e.target.value)}
+            className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
+          />
+          {formSaleEndsAt && (
+            <button type="button" onClick={() => setFormSaleEndsAt("")} className="text-xs text-red-500">
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-gray-600">Candidate questions</p>
+          <button onClick={addQuestion} className="text-xs text-[#6b2fa5]">
+            + Add question
+          </button>
+        </div>
+        <div className="mt-2 flex flex-col gap-3">
+          {questions.map((q, i) => (
+            <div key={i} className="rounded-xl border border-gray-200 p-3">
+              <div className="flex items-center gap-2">
+                <input
+                  placeholder="Question text"
+                  value={q.questionText}
+                  onChange={(e) => updateQuestion(i, { questionText: e.target.value })}
+                  className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#6b2fa5]"
+                />
+                <select
+                  value={q.questionType}
+                  onChange={(e) => updateQuestion(i, { questionType: e.target.value as QuestionType })}
+                  className="rounded-xl border border-gray-300 px-2 py-2 text-xs"
+                >
+                  {(Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]).map((t) => (
+                    <option key={t} value={t}>
+                      {QUESTION_TYPE_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+                <button onClick={() => removeQuestion(i)} className="shrink-0 text-xs text-red-500">
+                  Remove
+                </button>
+              </div>
+
+              {CHOICE_TYPES.includes(q.questionType) && (
+                <div className="mt-2 flex flex-col gap-1.5 pl-1">
+                  {(q.options ?? []).map((opt, optIdx) => (
+                    <div key={optIdx} className="flex items-center gap-2">
+                      <input
+                        placeholder={`Option ${optIdx + 1}`}
+                        value={opt}
+                        onChange={(e) => updateOption(i, optIdx, e.target.value)}
+                        className="flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs outline-none focus:border-[#6b2fa5]"
+                      />
+                      <button onClick={() => removeOption(i, optIdx)} className="text-xs text-red-500">
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <button onClick={() => addOption(i)} className="self-start text-xs text-[#6b2fa5]">
+                    + Add option
+                  </button>
+                </div>
+              )}
+
+              <label className="mt-2 flex items-center gap-1 text-xs text-gray-500">
+                <input type="checkbox" checked={q.required} onChange={(e) => updateQuestion(i, { required: e.target.checked })} />
+                Required
+              </label>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
+
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+    </ResponsiveSheet>
   )
 }

@@ -4,8 +4,9 @@ import type React from "react"
 import { useState } from "react"
 import {
   Tag, Percent, DollarSign, Users, Power, Ticket, TrendingUp,
-  Copy, Check, Calendar, Pencil, X, Layers,
+  Copy, Check, Calendar, Pencil, Layers,
 } from "lucide-react"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
 
 export interface DiscountData {
   id?: string
@@ -197,27 +198,39 @@ function EditDiscountDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-      onClick={(e) => { if (e.target === e.currentTarget && !saving) onCancel() }}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-5 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gradient-to-br from-[#6b2fa5] to-[#8b4fc5] rounded-lg">
-              <Pencil size={18} className="text-white" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Edit {discount.code}</h3>
-              <p className="text-xs text-slate-500">Code and usage count can&apos;t be changed here</p>
-            </div>
-          </div>
-          <button onClick={onCancel} disabled={saving} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-            <X size={18} className="text-slate-500" />
+    <ResponsiveSheet
+      open
+      onClose={onCancel}
+      dismissible={!saving}
+      size="md"
+      icon={
+        <div className="p-2.5 bg-gradient-to-br from-[#6b2fa5] to-[#8b4fc5] rounded-lg">
+          <Pencil size={18} className="text-white" />
+        </div>
+      }
+      title={`Edit ${discount.code}`}
+      description="Code and usage count can't be changed here"
+      footer={
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            className="flex-1 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={saving}
+            className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#6b2fa5] to-[#8b4fc5] text-white text-sm font-bold hover:shadow-lg transition-all disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Save Changes"}
           </button>
         </div>
-
-        <div className="grid grid-cols-2 gap-4">
+      }
+    >
+      <div className="space-y-5">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-4">
           <div>
             <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
               <DollarSign size={16} className="text-[#6b2fa5]" />
@@ -284,25 +297,8 @@ function EditDiscountDialog({
           </label>
           <TicketScopePicker ticketPolicies={ticketPolicies} selected={applicableTickets} onChange={setApplicableTickets} />
         </div>
-
-        <div className="flex gap-3 pt-2">
-          <button
-            onClick={onCancel}
-            disabled={saving}
-            className="flex-1 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={submit}
-            disabled={saving}
-            className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#6b2fa5] to-[#8b4fc5] text-white text-sm font-bold hover:shadow-lg transition-all disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
-        </div>
       </div>
-    </div>
+    </ResponsiveSheet>
   )
 }
 

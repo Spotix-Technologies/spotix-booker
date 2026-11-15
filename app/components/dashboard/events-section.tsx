@@ -3,6 +3,7 @@
 import { Eye, Calendar, Ticket, TrendingUp, Wallet, ArrowRight } from "lucide-react"
 import Link from "next/link"
 import { MaskedAmount } from "@/components/ui/masked-amount"
+import { getTimeStatus, TIME_STATUS_LABEL, TIME_STATUS_STYLE } from "@/lib/event-time-status"
 
 interface Event {
   id: string
@@ -12,19 +13,38 @@ interface Event {
   revenue: number
   availableBalance: number
   status: string
+  flagged?: boolean
+  suspended?: boolean
 }
 
 function fmtCurrency(n: number) {
   return `₦${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
 }
 
+// Date-based badge — Past / Today / Upcoming — computed straight off
+// eventDate vs. right now. See lib/event-time-status.ts.
+const TimeStatusBadge = ({ eventDate }: { eventDate: string }) => {
+  const status = getTimeStatus(eventDate)
+  if (!status) return null
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${TIME_STATUS_STYLE[status]}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${status === "today" ? "bg-emerald-500 animate-pulse" : "bg-current opacity-50"}`} />
+      {TIME_STATUS_LABEL[status]}
+    </span>
+  )
+}
+
+// Moderation/lifecycle tag — active/inactive/flagged/suspended/cancelled —
+// still applies alongside the date-based badge above, it's just no longer
+// the only signal shown.
 const StatusBadge = ({ status }: { status: string }) => {
   const cfg: Record<string, string> = {
     active:    "bg-emerald-50 text-emerald-700 border-emerald-200",
     inactive:  "bg-slate-100 text-slate-500 border-slate-200",
     cancelled: "bg-red-50 text-red-600 border-red-200",
     completed: "bg-blue-50 text-blue-600 border-blue-200",
-    past:      "bg-amber-50 text-amber-600 border-amber-200",
+    flagged:   "bg-red-50 text-red-600 border-red-200",
+    suspended: "bg-red-50 text-red-600 border-red-200",
   }
   const cls = cfg[status] ?? "bg-slate-100 text-slate-500 border-slate-200"
   return (
@@ -105,7 +125,10 @@ export function EventsSection({ events, userId }: { events: Event[]; userId: str
                         <MaskedAmount value={fmtCurrency(event.availableBalance)} size="sm" className="text-[#6b2fa5] font-bold" />
                       </td>
                       <td className="px-5 py-4">
-                        <StatusBadge status={event.status} />
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <TimeStatusBadge eventDate={event.eventDate} />
+                          <StatusBadge status={event.status} />
+                        </div>
                       </td>
                       <td className="px-5 py-4">
                         <Link
@@ -127,7 +150,10 @@ export function EventsSection({ events, userId }: { events: Event[]; userId: str
                 <div key={event.id} className="p-4 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-bold text-slate-900 text-sm leading-tight">{event.eventName}</p>
-                    <StatusBadge status={event.status} />
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      <TimeStatusBadge eventDate={event.eventDate} />
+                      <StatusBadge status={event.status} />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs">

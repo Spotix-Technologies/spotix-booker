@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Lock, KeyRound, Loader2, AlertCircle, ShieldCheck, X, XCircle, Ban, KeySquare } from "lucide-react"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
+import { Lock, KeyRound, Loader2, AlertCircle, ShieldCheck, XCircle, Ban, KeySquare } from "lucide-react"
 
 interface VaultPendingPayout {
   id: string
@@ -37,23 +38,30 @@ function KeyEntryModal({
   const [useOtta, setUseOtta] = useState(false)
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={(e) => { if (e.target === e.currentTarget && !submitting) onCancel() }}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Lock size={16} className="text-[#6b2fa5]" />
-            </div>
-            <h3 className="text-base font-bold text-gray-900">Vault Sign-off</h3>
-          </div>
-          <button onClick={onCancel} disabled={submitting} className="text-gray-400 hover:text-gray-700">
-            <X size={18} />
-          </button>
+    <ResponsiveSheet
+      open
+      onClose={onCancel}
+      dismissible={!submitting}
+      size="sm"
+      zIndex={70}
+      title="Vault Sign-off"
+      icon={
+        <div className="p-2 bg-purple-100 rounded-lg">
+          <Lock size={16} className="text-[#6b2fa5]" />
         </div>
-
+      }
+      footer={
+        <button
+          onClick={() => onSubmit(key, useOtta)}
+          disabled={submitting || !key}
+          className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#6b2fa5] text-white hover:bg-[#5a2589] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          {submitting ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={14} />}
+          {submitting ? "Verifying..." : "Submit Key"}
+        </button>
+      }
+    >
+      <div className="space-y-4">
         <p className="text-sm text-gray-600">
           Enter your Vault Key to sign off on the payout for{" "}
           <span className="font-semibold text-gray-900">{payout.date}</span> (₦
@@ -76,7 +84,7 @@ function KeyEntryModal({
           value={key}
           onChange={(e) => setKey(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && key) onSubmit(key, useOtta) }}
-          className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#6b2fa5]"
+          className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#6b2fa5]"
         />
 
         {error && (
@@ -85,17 +93,8 @@ function KeyEntryModal({
             <p className="text-xs text-red-700">{error}</p>
           </div>
         )}
-
-        <button
-          onClick={() => onSubmit(key, useOtta)}
-          disabled={submitting || !key}
-          className="w-full py-2.5 rounded-xl text-sm font-semibold bg-[#6b2fa5] text-white hover:bg-[#5a2589] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-        >
-          {submitting ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={14} />}
-          {submitting ? "Verifying..." : "Submit Key"}
-        </button>
       </div>
-    </div>
+    </ResponsiveSheet>
   )
 }
 
@@ -113,35 +112,21 @@ function RejectConfirmModal({
   error: string | null
 }) {
   return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={(e) => { if (e.target === e.currentTarget && !submitting) onCancel() }}
-    >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-        <div className="flex justify-center">
-          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-            <XCircle size={22} className="text-red-600" />
-          </div>
+    <ResponsiveSheet
+      open
+      onClose={onCancel}
+      dismissible={!submitting}
+      role="alertdialog"
+      size="sm"
+      zIndex={70}
+      title="Reject this payout?"
+      icon={
+        <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+          <XCircle size={20} className="text-red-600" />
         </div>
-        <div className="text-center space-y-1">
-          <h3 className="text-base font-bold text-gray-900">Reject this payout?</h3>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            Rejecting the payout for{" "}
-            <span className="font-semibold text-gray-900">{payout.date}</span> (₦
-            {Number(payout.amount).toLocaleString()}) permanently kills it. It can no longer be
-            released — no other Vault participant will be able to submit their key against it,
-            and this can't be undone.
-          </p>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 flex gap-2">
-            <AlertCircle size={14} className="text-red-600 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-red-700">{error}</p>
-          </div>
-        )}
-
-        <div className="flex gap-3">
+      }
+      footer={
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
           <button
             onClick={onCancel}
             disabled={submitting}
@@ -158,8 +143,25 @@ function RejectConfirmModal({
             Reject Payout
           </button>
         </div>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600 leading-relaxed">
+          Rejecting the payout for{" "}
+          <span className="font-semibold text-gray-900">{payout.date}</span> (₦
+          {Number(payout.amount).toLocaleString()}) permanently kills it. It can no longer be
+          released — no other Vault participant will be able to submit their key against it,
+          and this can't be undone.
+        </p>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 flex gap-2">
+            <AlertCircle size={14} className="text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-red-700">{error}</p>
+          </div>
+        )}
       </div>
-    </div>
+    </ResponsiveSheet>
   )
 }
 

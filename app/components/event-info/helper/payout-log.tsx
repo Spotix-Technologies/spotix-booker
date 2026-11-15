@@ -37,6 +37,7 @@ import { SkeletonTable } from "@/components/ui/skeleton"
 import { fetchPayoutLogRecords, type DisplayStatus, type DisplayRecord } from "@/lib/payout-log-data"
 import { displayRecordToReceipt } from "@/lib/receipt-image"
 import ReceiptModal from "./receipt-modal"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
 
 interface PayoutLogProps {
   eventId: string
@@ -407,37 +408,21 @@ export default function PayoutLog({ eventId, userId, eventName, canManage = fals
       )}
 
       {confirmCancel && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={(e) => { if (e.target === e.currentTarget) setConfirmCancel(null) }}
-        >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <div className="flex justify-center">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                {confirmCancel.userId === userId ? <Ban size={22} className="text-red-600" /> : <XCircle size={22} className="text-red-600" />}
-              </div>
+        <ResponsiveSheet
+          open
+          onClose={() => setConfirmCancel(null)}
+          dismissible={!cancelling.has(confirmCancel.id)}
+          role="alertdialog"
+          size="sm"
+          zIndex={70}
+          title={confirmCancel.userId === userId ? "Stop this payout?" : "Reject this payout?"}
+          icon={
+            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+              {confirmCancel.userId === userId ? <Ban size={20} className="text-red-600" /> : <XCircle size={20} className="text-red-600" />}
             </div>
-            {confirmCancel.userId === userId ? (
-              <div className="text-center space-y-1">
-                <h3 className="text-base font-bold text-gray-900">Stop this payout?</h3>
-                <p className="text-sm text-gray-600">
-                  The Vault hold for <span className="font-semibold">{confirmCancel.date}</span> (₦
-                  {Number(confirmCancel.amount).toLocaleString()}) will be marked as cancelled — nothing has moved yet, so
-                  this fully stops it. This stays visible in the logs and can&apos;t be undone.
-                </p>
-              </div>
-            ) : (
-              <div className="text-center space-y-1">
-                <h3 className="text-base font-bold text-gray-900">Reject this payout?</h3>
-                <p className="text-sm text-gray-600">
-                  The Vault hold for <span className="font-semibold">{confirmCancel.date}</span> (₦
-                  {Number(confirmCancel.amount).toLocaleString()}), requested by{" "}
-                  <span className="font-semibold">{confirmCancel.initiatedByName ?? "another team member"}</span>, will be
-                  permanently rejected. The whole team will see you rejected it.
-                </p>
-              </div>
-            )}
-            <div className="flex gap-3">
+          }
+          footer={
+            <div className="flex flex-col-reverse sm:flex-row gap-3">
               <button
                 onClick={() => setConfirmCancel(null)}
                 disabled={cancelling.has(confirmCancel.id)}
@@ -460,8 +445,23 @@ export default function PayoutLog({ eventId, userId, eventName, canManage = fals
                 {confirmCancel.userId === userId ? "Stop Payout" : "Reject Payout"}
               </button>
             </div>
-          </div>
-        </div>
+          }
+        >
+          {confirmCancel.userId === userId ? (
+            <p className="text-sm text-gray-600">
+              The Vault hold for <span className="font-semibold">{confirmCancel.date}</span> (₦
+              {Number(confirmCancel.amount).toLocaleString()}) will be marked as cancelled — nothing has moved yet, so
+              this fully stops it. This stays visible in the logs and can&apos;t be undone.
+            </p>
+          ) : (
+            <p className="text-sm text-gray-600">
+              The Vault hold for <span className="font-semibold">{confirmCancel.date}</span> (₦
+              {Number(confirmCancel.amount).toLocaleString()}), requested by{" "}
+              <span className="font-semibold">{confirmCancel.initiatedByName ?? "another team member"}</span>, will be
+              permanently rejected. The whole team will see you rejected it.
+            </p>
+          )}
+        </ResponsiveSheet>
       )}
 
       {receiptRecord && (

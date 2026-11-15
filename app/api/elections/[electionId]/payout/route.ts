@@ -122,6 +122,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ele
   const access = await resolveElectionPayoutAccess(electionId, auth.userId)
   if (!access.ok) return fail(access.error, access.status)
 
+  // Suspended elections can't withdraw — see Admin Dashboard's election
+  // suspend/unsuspend action (app/lib/election-moderation.ts there).
+  // Checked here, not just surfaced as a UI banner, since this is the
+  // one place that actually moves money.
+  if (access.election?.suspended) {
+    return fail(
+      "This election has been suspended by Spotix and can't be paid out right now. Contact Spotix support for details.",
+      403,
+    )
+  }
+
   const globalSnap = await adminDb.collection("admin").doc("global").get()
   if (globalSnap.exists && globalSnap.data()!.isPayoutAllowed === false) {
     const reason = globalSnap.data()!.isPayoutNotAllowedReason ? ` Reason: ${globalSnap.data()!.isPayoutNotAllowedReason}` : ""

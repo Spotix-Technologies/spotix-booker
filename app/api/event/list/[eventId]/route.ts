@@ -36,6 +36,7 @@ import { FieldValue } from "firebase-admin/firestore"
 import { resolveEventAccess, isOwnerOrAdmin, EventAccessResult } from "@/lib/event-access"
 import { buildEventBundle } from "@/lib/event-bundle"
 import { slugify, isValidSlug, withSuffix, SLUG_RULES_HINT } from "@/lib/slug"
+import { cacheDel } from "@/lib/redis"
 
 const DEV_TAG = "spotix-api-v1"
 
@@ -247,6 +248,19 @@ export async function PATCH(
 
     try {
       await eventRef.update(updateData)
+
+      // Bust spotix-user's cached event doc (event:doc:{eventId} — same
+      // Upstash instance, see lib/redis.ts) so the public event page picks
+      // up the edit immediately instead of waiting out its TTL. This is the
+      // ONLY place that should ever invalidate that key from this side —
+      // ticket purchases don't (and shouldn't) touch it; live availability
+      // is served separately, straight from Firestore, by spotix-user's
+      // /api/v1/event/availability. Non-blocking — a failure here just
+      // means the next read waits out the TTL as before.
+      cacheDel(`event:doc:${eventId}`).catch((err) =>
+        console.error(`[PATCH edit] Cache invalidation failed for event ${eventId}:`, err)
+      )
+
       return ok({ message: "Event updated successfully" })
     } catch (e: any) {
       console.error("[PATCH edit] Firestore update failed", e)

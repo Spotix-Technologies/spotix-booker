@@ -5,6 +5,7 @@ import { AuthProvider } from "@/hooks/useAuth"
 import "./globals.css"
 import { WebChrome } from "@/components/web-chrome"
 import { Toaster } from "@/components/ui/toaster"
+import { AppStatusShell } from "@/components/status/AppStatusShell"
 
 // Every route in this app renders differently depending on the spotix_at
 // cookie (via proxy.ts + AuthProvider), so nothing here is safe to
@@ -99,14 +100,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <div className="min-h-screen flex flex-col">
-          <AuthProvider>
-            {/* <MaintenanceProvider> */}
-              <WebChrome>{children}</WebChrome>
-            {/* </MaintenanceProvider> */}
-          </AuthProvider>
-          <Toaster />
-        </div>
+        <AppStatusShell variant="booker">
+          <div className="min-h-screen flex flex-col">
+            <AuthProvider>
+              {/* <MaintenanceProvider> */}
+                <WebChrome>{children}</WebChrome>
+              {/* </MaintenanceProvider> */}
+            </AuthProvider>
+            <Toaster />
+          </div>
+        </AppStatusShell>
       </body>
     </html>
   )

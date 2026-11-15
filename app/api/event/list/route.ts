@@ -175,6 +175,7 @@ function shapeEvent(id: string, data: FirebaseFirestore.DocumentData, now: Date)
   return {
     id,
     eventName:     data.eventName    ?? "Unnamed Event",
+    eventSlug:     data.eventSlug    ?? id, // same fallback repo.js/preview route use server-side
     eventImage:    data.eventImage   ?? null,
     eventDate:     eventDate.toISOString(),
     eventType:     data.eventType    ?? "Other",

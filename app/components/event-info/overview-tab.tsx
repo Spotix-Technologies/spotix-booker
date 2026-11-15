@@ -1,10 +1,13 @@
 "use client"
 import { useState } from "react"
-import { Copy, Check, TrendingUp, Wallet, Users, DollarSign, Vote, Link2, ExternalLink, Percent, Loader2, AlertCircle, Settings2, X, CreditCard } from "lucide-react"
+import { Copy, Check, TrendingUp, Wallet, Users, DollarSign, Vote, Link2, ExternalLink, Percent, Loader2, AlertCircle, Settings2, CreditCard } from "lucide-react"
+import ResponsiveSheet from "@/components/ui/responsive-sheet"
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { MaskedAmount } from "@/components/ui/masked-amount"
 import { SalesTrendBadge } from "@/components/ui/sales-trend-badge"
 import { InlineTrend } from "@/components/ui/inline-trend"
+import VirtualQueueNotice from "./virtual-queue-notice"
+import { useChartReady } from "@/hooks/useChartReady"
 
 interface OverviewTabProps {
   eventData: any
@@ -51,6 +54,13 @@ export default function OverviewTab({
     }
     return { coversPaystackFee: false, coversSpotixFee: ev?.buyerBearsBurden === false }
   }
+
+  // This tab renders inside a CSS grid column (see the two-up "Charts
+  // Section" grid below), so on first mount the grid may not have
+  // resolved a column width yet — ResponsiveContainer would measure
+  // 0 and recharts would log the "width(-1) and height(-1)" warning.
+  // Wait one tick so the charts only mount once layout is settled.
+  const chartReady = useChartReady()
 
   const [feeBurden, setFeeBurden] = useState(resolveFeeBurden(eventData))
   const [savedFeeBurden, setSavedFeeBurden] = useState(resolveFeeBurden(eventData))
@@ -107,6 +117,9 @@ export default function OverviewTab({
           </p>
         </div>
       </div>
+
+      {/* Virtual Queue Notice — only renders when admin has it enabled */}
+      <VirtualQueueNotice eventData={eventData} />
 
       {/* Stats Grid - Enhanced with icons and animations */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -386,76 +399,76 @@ export default function OverviewTab({
 
       {/* Burden of Fee — granular gear modal */}
       {burdenGearOpen && (
-        <div className="fixed inset-0 z-[9998] bg-black/40 flex items-center justify-center p-4" onClick={() => setBurdenGearOpen(false)}>
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md space-y-5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h4 className="font-bold text-slate-900 flex items-center gap-2">
-                <Settings2 className="w-4 h-4 text-[#6b2fa5]" /> Customize Burden of Fee
-              </h4>
-              <button onClick={() => setBurdenGearOpen(false)}><X className="w-5 h-5 text-slate-400" /></button>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <CreditCard className="w-4 h-4 text-slate-500" />
-                <p className="text-sm font-semibold text-slate-800">Paystack's processing fee</p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDraftFeeBurden((d) => ({ ...d, coversPaystackFee: false }))}
-                  className={`text-xs font-semibold py-2.5 rounded-lg border transition-colors ${!draftFeeBurden.coversPaystackFee ? "border-[#6b2fa5] bg-[#6b2fa5]/5 text-[#6b2fa5]" : "border-slate-200 text-slate-500"}`}
-                >
-                  Attendee pays
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDraftFeeBurden((d) => ({ ...d, coversPaystackFee: true }))}
-                  className={`text-xs font-semibold py-2.5 rounded-lg border transition-colors ${draftFeeBurden.coversPaystackFee ? "border-[#6b2fa5] bg-[#6b2fa5]/5 text-[#6b2fa5]" : "border-slate-200 text-slate-500"}`}
-                >
-                  You pay
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Percent className="w-4 h-4 text-slate-500" />
-                <p className="text-sm font-semibold text-slate-800">Spotix's platform fee</p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDraftFeeBurden((d) => ({ ...d, coversSpotixFee: false }))}
-                  className={`text-xs font-semibold py-2.5 rounded-lg border transition-colors ${!draftFeeBurden.coversSpotixFee ? "border-[#6b2fa5] bg-[#6b2fa5]/5 text-[#6b2fa5]" : "border-slate-200 text-slate-500"}`}
-                >
-                  Attendee pays
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDraftFeeBurden((d) => ({ ...d, coversSpotixFee: true }))}
-                  className={`text-xs font-semibold py-2.5 rounded-lg border transition-colors ${draftFeeBurden.coversSpotixFee ? "border-[#6b2fa5] bg-[#6b2fa5]/5 text-[#6b2fa5]" : "border-slate-200 text-slate-500"}`}
-                >
-                  You pay
-                </button>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-400">
-              If an attendee ends up owing at least one fee, checkout shows them a "Fee breakdown" so it's always
-              clear what they're paying for.
-            </p>
-
+        <ResponsiveSheet
+          open
+          onClose={() => setBurdenGearOpen(false)}
+          size="md"
+          icon={<Settings2 className="w-5 h-5 text-[#6b2fa5] mt-0.5" />}
+          title="Customize Burden of Fee"
+          footer={
             <button
-              onClick={() => handleSaveFeeBurden(draftFeeBurden)}
-              disabled={savingBurden}
-              className="w-full py-2.5 text-sm font-semibold rounded-lg bg-[#6b2fa5] text-white hover:bg-[#5a2589] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {savingBurden && <Loader2 className="w-4 h-4 animate-spin" />}
-              Save
-            </button>
+                onClick={() => handleSaveFeeBurden(draftFeeBurden)}
+                disabled={savingBurden}
+                className="w-full py-2.5 text-sm font-semibold rounded-lg bg-[#6b2fa5] text-white hover:bg-[#5a2589] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {savingBurden && <Loader2 className="w-4 h-4 animate-spin" />}
+                Save
+              </button>
+          }
+        >
+          <div className="space-y-5">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <CreditCard className="w-4 h-4 text-slate-500" />
+              <p className="text-sm font-semibold text-slate-800">Paystack's processing fee</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setDraftFeeBurden((d) => ({ ...d, coversPaystackFee: false }))}
+                className={`text-xs font-semibold py-2.5 rounded-lg border transition-colors ${!draftFeeBurden.coversPaystackFee ? "border-[#6b2fa5] bg-[#6b2fa5]/5 text-[#6b2fa5]" : "border-slate-200 text-slate-500"}`}
+              >
+                Attendee pays
+              </button>
+              <button
+                type="button"
+                onClick={() => setDraftFeeBurden((d) => ({ ...d, coversPaystackFee: true }))}
+                className={`text-xs font-semibold py-2.5 rounded-lg border transition-colors ${draftFeeBurden.coversPaystackFee ? "border-[#6b2fa5] bg-[#6b2fa5]/5 text-[#6b2fa5]" : "border-slate-200 text-slate-500"}`}
+              >
+                You pay
+              </button>
+            </div>
           </div>
-        </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Percent className="w-4 h-4 text-slate-500" />
+              <p className="text-sm font-semibold text-slate-800">Spotix's platform fee</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setDraftFeeBurden((d) => ({ ...d, coversSpotixFee: false }))}
+                className={`text-xs font-semibold py-2.5 rounded-lg border transition-colors ${!draftFeeBurden.coversSpotixFee ? "border-[#6b2fa5] bg-[#6b2fa5]/5 text-[#6b2fa5]" : "border-slate-200 text-slate-500"}`}
+              >
+                Attendee pays
+              </button>
+              <button
+                type="button"
+                onClick={() => setDraftFeeBurden((d) => ({ ...d, coversSpotixFee: true }))}
+                className={`text-xs font-semibold py-2.5 rounded-lg border transition-colors ${draftFeeBurden.coversSpotixFee ? "border-[#6b2fa5] bg-[#6b2fa5]/5 text-[#6b2fa5]" : "border-slate-200 text-slate-500"}`}
+              >
+                You pay
+              </button>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-400">
+            If an attendee ends up owing at least one fee, checkout shows them a "Fee breakdown" so it's always
+            clear what they're paying for.
+          </p>
+          </div>
+        </ResponsiveSheet>
       )}
 
       {/* Event Description - Enhanced readability */}
@@ -474,42 +487,46 @@ export default function OverviewTab({
               {salesTrend && <SalesTrendBadge pct={salesTrend.pct} tone={salesTrend.tone} metric="ticket sales" />}
             </div>
             {ticketSalesByDay.length > 0 ? (
-              <ResponsiveContainer width="100%" height={320}>
-                <AreaChart data={ticketSalesByDay}>
-                  <defs>
-                    <linearGradient id="colorTickets" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6b2fa5" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#6b2fa5" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis 
-                    dataKey="date" 
-                    stroke="#64748b" 
-                    style={{ fontSize: '12px' }}
-                  />
-                  <YAxis 
-                    stroke="#64748b" 
-                    style={{ fontSize: '12px' }}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'white', 
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="count" 
-                    name="Tickets Sold" 
-                    stroke="#6b2fa5" 
-                    strokeWidth={3}
-                    fill="url(#colorTickets)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              !chartReady ? (
+                <div className="h-[320px]" />
+              ) : (
+                <ResponsiveContainer width="100%" height={320}>
+                  <AreaChart data={ticketSalesByDay}>
+                    <defs>
+                      <linearGradient id="colorTickets" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6b2fa5" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#6b2fa5" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis 
+                      dataKey="date" 
+                      stroke="#64748b" 
+                      style={{ fontSize: '12px' }}
+                    />
+                    <YAxis 
+                      stroke="#64748b" 
+                      style={{ fontSize: '12px' }}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'white', 
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="count" 
+                      name="Tickets Sold" 
+                      stroke="#6b2fa5" 
+                      strokeWidth={3}
+                      fill="url(#colorTickets)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )
             ) : (
               <div className="flex items-center justify-center py-20">
                 <p className="text-slate-500 text-center">No sales data available yet</p>
@@ -521,34 +538,38 @@ export default function OverviewTab({
           <div className="bg-white rounded-xl p-8 border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-300">
             <h4 className="text-xl font-bold text-slate-900 mb-6">Ticket Types Distribution</h4>
             {ticketTypeData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={ticketTypeData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis 
-                    dataKey="type" 
-                    stroke="#64748b" 
-                    style={{ fontSize: '12px' }}
-                  />
-                  <YAxis 
-                    stroke="#64748b" 
-                    style={{ fontSize: '12px' }}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'white', 
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                  />
-                  <Bar 
-                    dataKey="count" 
-                    fill="#6b2fa5" 
-                    name="Tickets Sold" 
-                    radius={[8, 8, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              !chartReady ? (
+                <div className="h-[320px]" />
+              ) : (
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={ticketTypeData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis 
+                      dataKey="type" 
+                      stroke="#64748b" 
+                      style={{ fontSize: '12px' }}
+                    />
+                    <YAxis 
+                      stroke="#64748b" 
+                      style={{ fontSize: '12px' }}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'white', 
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }}
+                    />
+                    <Bar 
+                      dataKey="count" 
+                      fill="#6b2fa5" 
+                      name="Tickets Sold" 
+                      radius={[8, 8, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )
             ) : (
               <div className="flex items-center justify-center py-20">
                 <p className="text-slate-500 text-center">No ticket type data available</p>
