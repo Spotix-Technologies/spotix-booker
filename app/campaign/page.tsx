@@ -3,8 +3,9 @@
 /**
  * app/campaign/page.tsx
  *
- * Campaign dashboard (spec §19–20). Event picker, credit balances,
- * recent campaigns list + a simple Recharts bar chart, empty state.
+ * Campaign dashboard (spec §19–20). Header (event picker + Create Campaign),
+ * email / SMS credit cards side by side, performance chart, email / SMS
+ * campaign lists side by side, then recent credit transactions.
  * Buy Credits opens BuyCreditsModal (Phase 3's Paystack checkout,
  * spec §18) via ?checkout=1.
  *
@@ -88,44 +89,34 @@ const STATUS_STYLES: Record<string, string> = {
 // campaign list) so the page doesn't jump around once real content
 // lands, and there's no gap where the empty state can flash through.
 function CampaignsSkeleton() {
+  const card = "bg-white rounded-2xl border border-slate-200 shadow-sm"
   return (
     <div className="space-y-6 animate-pulse">
-      <div className="grid sm:grid-cols-2 gap-4">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
-          <div className="h-4 w-24 bg-slate-100 rounded" />
-          <div className="h-8 w-32 bg-slate-100 rounded" />
-          <div className="h-4 w-28 bg-slate-100 rounded" />
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-between gap-4">
-          <div className="space-y-2">
-            <div className="h-4 w-40 bg-slate-100 rounded" />
-            <div className="h-5 w-32 bg-slate-100 rounded" />
+      <div className="grid md:grid-cols-2 gap-4">
+        {[0, 1].map((i) => (
+          <div key={i} className={`${card} p-5 space-y-3`}>
+            <div className="h-10 w-40 bg-slate-100 rounded-xl" />
+            <div className="h-8 w-32 bg-slate-100 rounded" />
+            <div className="h-9 w-32 bg-slate-100 rounded-xl" />
           </div>
-          <div className="h-10 w-36 bg-slate-100 rounded-xl flex-shrink-0" />
-        </div>
+        ))}
       </div>
-
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-start gap-4">
-        <div className="w-10 h-10 rounded-xl bg-slate-100 flex-shrink-0" />
-        <div className="flex-1 space-y-2">
-          <div className="h-4 w-24 bg-slate-100 rounded" />
-          <div className="h-4 w-full max-w-md bg-slate-100 rounded" />
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+      <div className={`${card} p-5 space-y-4`}>
         <div className="h-4 w-48 bg-slate-100 rounded" />
         <div className="h-56 w-full bg-slate-100 rounded-xl" />
       </div>
-
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm divide-y divide-slate-100 overflow-hidden">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="flex items-center justify-between px-5 py-4">
-            <div className="space-y-2">
-              <div className="h-4 w-40 bg-slate-100 rounded" />
-              <div className="h-3 w-56 bg-slate-100 rounded" />
-            </div>
-            <div className="h-6 w-20 bg-slate-100 rounded-full" />
+      <div className="grid lg:grid-cols-2 gap-4">
+        {[0, 1].map((col) => (
+          <div key={col} className={`${card} divide-y divide-slate-100 overflow-hidden`}>
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex items-center justify-between px-5 py-4">
+                <div className="space-y-2">
+                  <div className="h-4 w-36 bg-slate-100 rounded" />
+                  <div className="h-3 w-48 bg-slate-100 rounded" />
+                </div>
+                <div className="h-6 w-20 bg-slate-100 rounded-full" />
+              </div>
+            ))}
           </div>
         ))}
       </div>
@@ -257,9 +248,10 @@ function CampaignDashboard() {
             <h1 className="text-2xl font-bold text-slate-900">Campaigns</h1>
             <p className="text-sm text-slate-500">Email and text your attendees and track performance</p>
           </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
           {events.length > 0 && (
             <select
-              className="text-sm border border-slate-200 rounded-lg px-3 py-2.5 bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#6b2fa5]/30 focus:border-[#6b2fa5]"
+              className="w-full sm:w-auto min-w-0 text-sm border border-slate-200 rounded-lg px-3 py-2.5 bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#6b2fa5]/30 focus:border-[#6b2fa5]"
               value={eventId}
               onChange={(e) => {
                 setEventId(e.target.value)
@@ -271,6 +263,15 @@ function CampaignDashboard() {
               ))}
             </select>
           )}
+          {eventId && (
+            <button
+              onClick={() => setChooseTypeOpen(true)}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#6b2fa5] text-white px-4 py-2.5 text-sm font-semibold hover:bg-[#5a1f8a] transition-colors whitespace-nowrap"
+            >
+              <PlusCircle className="w-4 h-4" /> Create Campaign
+            </button>
+          )}
+          </div>
         </div>
 
         {loading ? (
@@ -287,63 +288,154 @@ function CampaignDashboard() {
               </div>
             )}
 
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                <p className="text-sm text-slate-500">Email Credits <span className="text-slate-400">· all your events</span></p>
-                <p className="text-3xl font-bold text-slate-900 mt-1">
+            {/* Credits — email and SMS side by side. Both are account-level. */}
+            <section className="grid md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#6b2fa5]/10 flex items-center justify-center flex-shrink-0">
+                    <Mail className="w-5 h-5 text-[#6b2fa5]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Email credits</p>
+                    <p className="text-xs text-slate-400">Shared across all your events</p>
+                  </div>
+                </div>
+                <p className="text-3xl font-bold text-slate-900 mt-4">
                   {credits ? formatCount(credits.available) : "—"} <span className="text-base font-normal text-slate-400">available</span>
                 </p>
-                {credits && credits.reserved > 0 && (
-                  <p className="text-xs text-slate-400 mt-1">{formatCount(credits.reserved)} reserved for active campaigns</p>
-                )}
+                <p className="text-xs text-slate-400 mt-1 min-h-[1rem]">
+                  {credits && credits.reserved > 0 ? `${formatCount(credits.reserved)} reserved for active campaigns` : ""}
+                </p>
                 <Link
                   href={`/campaign?eventId=${eventId}&checkout=1`}
-                  className="inline-flex items-center gap-1.5 mt-3 text-sm font-semibold text-[#6b2fa5] hover:text-[#5a1f8a] transition-colors"
+                  className="inline-flex items-center justify-center gap-1.5 mt-4 rounded-xl border border-[#6b2fa5]/30 px-4 py-2 text-sm font-semibold text-[#6b2fa5] hover:bg-[#6b2fa5]/5 transition-colors self-start"
                 >
-                  <CreditCard className="w-3.5 h-3.5" /> Buy Credits
+                  <CreditCard className="w-3.5 h-3.5" /> Buy credits
                 </Link>
               </div>
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm text-slate-500">Ready to reach your attendees?</p>
-                  <p className="text-lg font-semibold text-slate-900 mt-1">Start a new campaign</p>
-                </div>
-                <button
-                  onClick={() => setChooseTypeOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#6b2fa5] text-white px-4 py-2.5 text-sm font-semibold hover:bg-[#5a1f8a] transition-colors flex-shrink-0"
-                >
-                  <PlusCircle className="w-4 h-4" /> Create Campaign
-                </button>
-              </div>
-            </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-start gap-4">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col">
+                <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-[#6b2fa5]/10 flex items-center justify-center flex-shrink-0">
                     <MessageSquareText className="w-5 h-5 text-[#6b2fa5]" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-800">Bulk SMS</p>
-                    <p className="text-3xl font-bold text-slate-900 mt-1">
-                      {smsCredits ? formatCount(smsCredits.available) : "—"} <span className="text-base font-normal text-slate-400">SMS credits</span>
-                    </p>
-                    {smsCredits && smsCredits.reserved > 0 && (
-                      <p className="text-xs text-slate-400 mt-1">{formatCount(smsCredits.reserved)} reserved for campaigns awaiting delivery</p>
-                    )}
-                    <Link
-                      href={`/campaign?eventId=${eventId}&smsCheckout=1`}
-                      className="inline-flex items-center gap-1.5 mt-2 text-sm font-semibold text-[#6b2fa5] hover:text-[#5a1f8a] transition-colors"
-                    >
-                      <CreditCard className="w-3.5 h-3.5" /> Buy SMS Credits
-                    </Link>
+                    <p className="text-sm font-semibold text-slate-800">Bulk SMS credits</p>
+                    <p className="text-xs text-slate-400">Shared across all your events</p>
                   </div>
                 </div>
+                <p className="text-3xl font-bold text-slate-900 mt-4">
+                  {smsCredits ? formatCount(smsCredits.available) : "—"} <span className="text-base font-normal text-slate-400">available</span>
+                </p>
+                <p className="text-xs text-slate-400 mt-1 min-h-[1rem]">
+                  {smsCredits && smsCredits.reserved > 0 ? `${formatCount(smsCredits.reserved)} reserved for campaigns awaiting delivery` : ""}
+                </p>
+                <Link
+                  href={`/campaign?eventId=${eventId}&smsCheckout=1`}
+                  className="inline-flex items-center justify-center gap-1.5 mt-4 rounded-xl border border-[#6b2fa5]/30 px-4 py-2 text-sm font-semibold text-[#6b2fa5] hover:bg-[#6b2fa5]/5 transition-colors self-start"
+                >
+                  <CreditCard className="w-3.5 h-3.5" /> Buy SMS credits
+                </Link>
+              </div>
+            </section>
+
+            {/* Performance chart (email, this event) */}
+            {campaigns.length > 0 && (
+              <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                <p className="text-sm font-semibold text-slate-800">Recent email performance</p>
+                <p className="text-xs text-slate-400 mt-0.5 mb-3">Last {RECENT_CAMPAIGNS} email campaigns for this event</p>
+                <MeasuredChart height={260}>
+                  {(width) => {
+                    const maxLabel = width < 420 ? 6 : 14
+                    return (
+                      <BarChart width={width} height={260} data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                        <XAxis
+                          dataKey="name"
+                          fontSize={11}
+                          stroke="#94a3b8"
+                          interval={0}
+                          tickLine={false}
+                          tickFormatter={(v: string) => (v.length > maxLabel ? `${v.slice(0, maxLabel)}…` : v)}
+                        />
+                        <YAxis fontSize={12} allowDecimals={false} stroke="#94a3b8" width={32} />
+                        <Tooltip />
+                        <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12 }} />
+                        <Bar dataKey="Sent" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Delivered" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Opened" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Clicked" fill="#6b2fa5" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Bounced" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    )
+                  }}
+                </MeasuredChart>
+              </section>
+            )}
+
+            {/* Recent campaigns — email and SMS side by side */}
+            <section className="grid lg:grid-cols-2 gap-4 items-start">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Email campaigns</p>
+                    <p className="text-xs text-slate-400 mt-0.5">For the selected event</p>
+                  </div>
+                  <Link href="/campaign/list?kind=email" className="text-xs font-semibold text-[#6b2fa5] hover:text-[#5a1f8a] whitespace-nowrap">
+                    View all
+                  </Link>
+                </div>
+                {recentEmail.length === 0 ? (
+                  <div className="border-t border-slate-100 px-5 py-8 flex flex-col items-center text-center gap-3">
+                    <p className="text-sm text-slate-500">No email campaigns yet for this event</p>
+                    <button
+                      onClick={() => setChooseTypeOpen(true)}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#6b2fa5] text-white px-4 py-2 text-sm font-semibold hover:bg-[#5a1f8a] transition-colors"
+                    >
+                      <PlusCircle className="w-4 h-4" /> Create your first campaign
+                    </button>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100 border-t border-slate-100">
+                    {recentEmail.map((c) => (
+                      <Link
+                        key={c.id}
+                        href={c.status === "flagged" ? `/campaign/create?resume=${c.id}` : `/campaign/${c.id}?type=email`}
+                        className="flex items-center justify-between gap-3 px-5 py-4 hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-900 truncate">{c.name}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {c.total_recipients.toLocaleString()} recipients · {new Date(c.created_at).toLocaleDateString()}
+                          </p>
+                          {c.status === "flagged" && (
+                            <p className="text-xs text-red-600 mt-0.5">Needs changes — tap to fix and resubmit</p>
+                          )}
+                        </div>
+                        <span className={`text-xs rounded-full px-3 py-1 font-semibold capitalize flex-shrink-0 ${STATUS_STYLES[c.status] || "bg-slate-100 text-slate-600"}`}>
+                          {c.status.replace(/_/g, " ")}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {recentSms.length > 0 && (
-                <div className="border-t border-slate-100">
-                  <div className="divide-y divide-slate-100">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">SMS campaigns</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Across all your events</p>
+                  </div>
+                  <Link href="/campaign/list?kind=sms" className="text-xs font-semibold text-[#6b2fa5] hover:text-[#5a1f8a] whitespace-nowrap">
+                    View all
+                  </Link>
+                </div>
+                {recentSms.length === 0 ? (
+                  <div className="border-t border-slate-100 px-5 py-8 text-center">
+                    <p className="text-sm text-slate-500">No SMS campaigns yet</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100 border-t border-slate-100">
                     {recentSms.map((c) => (
                       <Link
                         key={c.id}
@@ -352,7 +444,7 @@ function CampaignDashboard() {
                       >
                         <div className="min-w-0">
                           <p className="font-medium text-slate-900 truncate">{c.name}</p>
-                          <p className="text-xs text-slate-400 mt-0.5">
+                          <p className="text-xs text-slate-400 mt-0.5 truncate">
                             {c.event_name_snapshot} · {formatCount(c.recipient_count)} numbers · {new Date(c.created_at).toLocaleDateString()}
                           </p>
                         </div>
@@ -362,21 +454,16 @@ function CampaignDashboard() {
                       </Link>
                     ))}
                   </div>
-                  <Link
-                    href="/campaign/list?kind=sms"
-                    className="block px-5 py-3 text-xs font-semibold text-[#6b2fa5] hover:text-[#5a1f8a] border-t border-slate-100 transition-colors"
-                  >
-                    View all SMS campaigns
-                  </Link>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            </section>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            {/* Recent credit movements */}
+            <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 pt-4 pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-slate-800">Recent transactions</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Your last {RECENT_TRANSACTIONS} credit movements — shared across all your events</p>
+                  {/* <p className="text-xs text-slate-400 mt-0.5">Your last {RECENT_TRANSACTIONS} credit movements — shared across all your events</p> */}
                 </div>
                 <div className="flex items-center gap-3">
                   <TransactionFilterTabs value={txnFilter} onChange={setTxnFilter} />
@@ -398,84 +485,7 @@ function CampaignDashboard() {
                   <TransactionsTable transactions={transactions} />
                 </div>
               )}
-            </div>
-
-            {campaigns.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-200 p-12 flex flex-col items-center text-center gap-3">
-                <div className="w-14 h-14 rounded-full bg-[#6b2fa5]/10 flex items-center justify-center">
-                  <Mail className="w-7 h-7 text-[#6b2fa5]" />
-                </div>
-                <p className="text-slate-500 font-medium">No campaigns yet for this event</p>
-                <button
-                  onClick={() => setChooseTypeOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#6b2fa5] text-white px-4 py-2.5 text-sm font-semibold hover:bg-[#5a1f8a] transition-colors"
-                >
-                  <PlusCircle className="w-4 h-4" /> Create your first campaign
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                  <p className="text-sm font-semibold text-slate-800 mb-3">Recent campaign performance</p>
-                  <MeasuredChart height={260}>
-                    {(width) => {
-                      const maxLabel = width < 420 ? 6 : 14
-                      return (
-                        <BarChart width={width} height={260} data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                          <XAxis
-                            dataKey="name"
-                            fontSize={11}
-                            stroke="#94a3b8"
-                            interval={0}
-                            tickLine={false}
-                            tickFormatter={(v: string) => (v.length > maxLabel ? `${v.slice(0, maxLabel)}…` : v)}
-                          />
-                          <YAxis fontSize={12} allowDecimals={false} stroke="#94a3b8" width={32} />
-                          <Tooltip />
-                          <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12 }} />
-                          <Bar dataKey="Sent" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="Delivered" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="Opened" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="Clicked" fill="#6b2fa5" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="Bounced" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      )
-                    }}
-                  </MeasuredChart>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-slate-800">Email campaigns</p>
-                    <Link href="/campaign/list?kind=email" className="text-xs font-semibold text-[#6b2fa5] hover:text-[#5a1f8a] whitespace-nowrap">
-                      View all
-                    </Link>
-                  </div>
-                  <div className="divide-y divide-slate-100 border-t border-slate-100">
-                  {recentEmail.map((c) => (
-                    <Link
-                      key={c.id}
-                      href={c.status === "flagged" ? `/campaign/create?resume=${c.id}` : `/campaign/${c.id}?type=email`}
-                      className="flex items-center justify-between px-5 py-4 hover:bg-slate-50 transition-colors"
-                    >
-                      <div>
-                        <p className="font-medium text-slate-900">{c.name}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          {c.total_recipients.toLocaleString()} recipients · {new Date(c.created_at).toLocaleDateString()}
-                        </p>
-                        {c.status === "flagged" && (
-                          <p className="text-xs text-red-600 mt-0.5">Needs changes — tap to fix and resubmit</p>
-                        )}
-                      </div>
-                      <span className={`text-xs rounded-full px-3 py-1 font-semibold capitalize flex-shrink-0 ${STATUS_STYLES[c.status] || "bg-slate-100 text-slate-600"}`}>
-                        {c.status.replace(/_/g, " ")}
-                      </span>
-                    </Link>
-                  ))}
-                  </div>
-                </div>
-              </>
-            )}
+            </section>
           </>
         )}
       </div>

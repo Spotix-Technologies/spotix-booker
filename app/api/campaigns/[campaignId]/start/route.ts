@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { verifyAccessToken } from "@/lib/auth-tokens"
 import { callCampaignBackend } from "@/lib/campaign-backend"
+import { triggerCampaignProcessing } from "@/lib/campaign-trigger"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -35,5 +36,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ cam
     method: "POST",
     body: JSON.stringify({ organizerId: uid }),
   })
+
+  // Accepted (queued, or sent off for review): kick the worker for this one
+  // campaign now so it doesn't wait for the hourly cron.
+  if (res.ok && data?.success) await triggerCampaignProcessing(campaignId)
+
   return NextResponse.json(data, { status: res.status })
 }
