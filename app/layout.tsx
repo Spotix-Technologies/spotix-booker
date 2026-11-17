@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { AuthProvider } from "@/hooks/useAuth"
 // import { MaintenanceProvider } from "@/components/MaintenanceProvider"
@@ -6,6 +6,7 @@ import "./globals.css"
 import { WebChrome } from "@/components/web-chrome"
 import { Toaster } from "@/components/ui/toaster"
 import { AppStatusShell } from "@/components/status/AppStatusShell"
+import { ViewportLock } from "@/components/viewport-lock"
 
 // Every route in this app renders differently depending on the spotix_at
 // cookie (via proxy.ts + AuthProvider), so nothing here is safe to
@@ -96,10 +97,20 @@ export const metadata: Metadata = {
   verification: {},
 }
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  minimumScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <ViewportLock />
         <AppStatusShell variant="booker">
           <div className="min-h-screen flex flex-col">
             <AuthProvider>
