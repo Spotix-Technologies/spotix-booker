@@ -6,7 +6,7 @@ import type React from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { tryRefreshTokens, getAccessToken, authFetch } from "@/lib/auth-client"
-import { ArrowLeft, RefreshCw, LogOut, Shield, UserCheck, Calculator, AlertTriangle, Settings, ChevronLeft, ChevronRight, Code2 } from "lucide-react"
+import { ArrowLeft, RefreshCw, LogOut, Shield, UserCheck, Calculator, AlertTriangle, Settings, ChevronLeft, ChevronRight, Code2, History } from "lucide-react"
 import { eventCacheManager } from "@/lib/cache-manger"
 import { toast } from "@/lib/toast"
 import ResponsiveSheet from "@/components/ui/responsive-sheet"
@@ -18,6 +18,7 @@ import CheckinTab from "@/components/event-info/checkin-tab"
 import DiscountsTab from "@/components/event-info/discounts-tab"
 import PayoutsTab from "@/components/event-info/payouts-tab"
 import EditEventTab from "@/components/event-info/edit-event-tab"
+import EditHistoryTab from "@/components/event-info/edit-history-tab"
 import MerchTab from "@/components/event-info/merch-tab"
 import ReferralsTab from "@/components/event-info/referrals-tab"
 import EventLinkTab from "@/components/event-info/event-link-tab"
@@ -102,7 +103,7 @@ const TAB_LABELS: Record<TabId, string> = {
   checkin:   "Check-in",
   discounts: "Discounts",  merch:     "Merch",       referrals: "Referrals",
   form:      "Form",       payouts:   "Payouts",     responses: "Responses",
-  weather:   "Weather",    transfer:  "Transfer Event", edit:   "Edit Event",
+  weather:   "Weather",    transfer:  "Transfer Event", edit:   "Edit Event", history: "Edit History",
   teams:     "Teams",      agentRequests: "Agent Requests",
   apiAccess: "API Access", observability: "Observability",
 }
@@ -628,6 +629,7 @@ function EventInfoInner({ eventId }: { eventId: string }) {
     transfer: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m16 3 4 4-4 4" /><path d="M20 7H4" /><path d="m8 21-4-4 4-4" /><path d="M4 17h16" /></svg>,
     edit: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>,
     teams: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
+    history: <History size={14} />,
     agentRequests: undefined,
     apiAccess: <Code2 size={14} />,
     observability: <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" /></svg>,
@@ -901,6 +903,10 @@ function EventInfoInner({ eventId }: { eventId: string }) {
               loadedTabs.has("edit") && editFormData
                 ? <EditEventTab editFormData={editFormData} handleInputChange={handleInputChange} handleTicketPriceChange={handleTicketPriceChange} addTicketPrice={addTicketPrice} handleSubmitEdit={handleSubmitEdit} setEditFormData={setEditFormData} userId={currentUid} eventId={eventId} />
                 : <TabSkeleton />
+            )}
+
+            {activeTab === "history" && visibleTabs.includes("history") && (
+              loadedTabs.has("history") ? <EditHistoryTab eventId={eventId} /> : <TabSkeleton />
             )}
 
             {activeTab === "teams" && visibleTabs.includes("teams") && (

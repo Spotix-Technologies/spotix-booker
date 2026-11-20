@@ -29,6 +29,7 @@ import { adminDb } from "@/lib/firebase-admin"
 import { verifyAccessToken } from "@/lib/auth-tokens"
 import { FieldValue } from "firebase-admin/firestore"
 import { resolveEventAccess, hasTab } from "@/lib/event-access"
+import { recordEditHistory, actorFromAccess, type EditActor } from "@/lib/edit-history"
 
 const DEV_TAG = "spotix-api-v1"
 
@@ -58,13 +59,13 @@ async function authenticate(): Promise<{ userId: string } | NextResponse> {
 async function resolveReferralsAccess(
   eventId: string,
   userId: string
-): Promise<{ ref: FirebaseFirestore.DocumentReference } | NextResponse> {
+): Promise<{ ref: FirebaseFirestore.DocumentReference; organizerId: string; actor: EditActor } | NextResponse> {
   const access = await resolveEventAccess(eventId, userId)
   if (!access.ok) return fail(access.error, access.status)
   if (!hasTab(access, "referrals")) {
     return fail("Forbidden: your role does not have access to Referrals on this event", 403)
   }
-  return { ref: access.eventRef }
+  return { ref: access.eventRef, organizerId: access.organizerId, actor: actorFromAccess(access, userId) }
 }
 
 // ─── GET ───────────────────────────────────────────────────────────────────────
@@ -145,7 +146,7 @@ export async function POST(
 
   const owned = await resolveReferralsAccess(eventId, userId)
   if (owned instanceof NextResponse) return owned
-  const { ref: eventRef } = owned
+  const { ref: eventRef, organizerId, actor } = owned
 
   const referralsRef = eventRef.collection("referrals")
 
@@ -164,6 +165,14 @@ export async function POST(
     await referralsRef.doc(code.trim()).set({
       totalTickets: 0,
       createdAt: FieldValue.serverTimestamp(),
+    })
+
+    recordEditHistory({
+      eventId,
+      organizerId,
+      action: "referral_added",
+      actor,
+      changes: { referralCode: { before: null, after: code.trim() } },
     })
 
     return ok(
@@ -199,7 +208,7 @@ export async function DELETE(
 
   const owned = await resolveReferralsAccess(eventId, userId)
   if (owned instanceof NextResponse) return owned
-  const { ref: eventRef } = owned
+  const { ref: eventRef, organizerId, actor } = owned
 
   const referralRef = eventRef.collection("referrals").doc(code.trim())
   const snap = await referralRef.get()
@@ -215,6 +224,13 @@ export async function DELETE(
       await batch.commit()
     }
     await referralRef.delete()
+    recordEditHistory({
+      eventId,
+      organizerId,
+      action: "referral_removed",
+      actor,
+      changes: { referralCode: { before: code.trim(), after: null } },
+    })
     return ok({ message: "Referral code deleted successfully" })
   } catch (e) {
     console.error("[DELETE referrals] failed", e)

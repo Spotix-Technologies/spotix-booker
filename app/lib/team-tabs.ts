@@ -15,7 +15,7 @@
 export const ALL_TABS = [
   "overview", "eventlink", "payouts", "attendees", "checkin",
   "discounts", "merch", "referrals", "form", "responses",
-  "weather", "transfer", "edit", "teams", "agentRequests", "apiAccess",
+  "weather", "transfer", "edit", "history", "teams", "agentRequests", "apiAccess",
   "observability",
 ] as const
 
@@ -34,7 +34,7 @@ export type TabId = typeof ALL_TABS[number]
 export const BUILT_IN_ROLE_TABS: Record<string, TabId[]> = {
   admin: [
     "overview", "eventlink", "payouts", "attendees", "checkin", "discounts", "merch",
-    "referrals", "form", "responses", "weather", "transfer", "edit",
+    "referrals", "form", "responses", "weather", "transfer", "edit", "history",
     "teams", "agentRequests", "apiAccess", "observability",
   ],
   checkin:    ["attendees", "checkin", "eventlink", "weather", "form", "responses"],
@@ -42,9 +42,10 @@ export const BUILT_IN_ROLE_TABS: Record<string, TabId[]> = {
 }
 
 // Maps permission IDs (stored in Firestore for custom roles) → TabId.
-// Note "edit", "teams", and "agentRequests" are intentionally NOT
-// mappable — a custom role can never be granted event-editing, team
-// management, or agent-request handling; those stay owner/admin-only.
+// Note "edit", "history", "teams", and "agentRequests" are intentionally NOT
+// mappable — a custom role can never be granted event-editing, the edit
+// history, team management, or agent-request handling; those stay
+// owner/admin-only.
 export const PERMISSION_TO_TAB: Record<string, TabId> = {
   overview:  "overview",
   attendees: "attendees",

@@ -37,8 +37,27 @@ import { resolveEventAccess, isOwnerOrAdmin, EventAccessResult } from "@/lib/eve
 import { buildEventBundle } from "@/lib/event-bundle"
 import { slugify, isValidSlug, withSuffix, SLUG_RULES_HINT } from "@/lib/slug"
 import { cacheDel } from "@/lib/redis"
+import { recordEditHistory, pickFields, ownerActor, actorFromAccess } from "@/lib/edit-history"
 
 const DEV_TAG = "spotix-api-v1"
+
+// Fields the "edit" action can change — what we snapshot for edit history.
+const EDIT_HISTORY_FIELDS = [
+  "eventName", "eventDescription", "eventDate", "eventEndDate", "eventVenue", "eventStart", "eventEnd",
+  "eventType", "country", "state", "isFree", "ticketPrices", "enableStopDate", "stopDate",
+  "enableColorCode", "colorCode", "enableMaxSize", "maxSize",
+] as const
+const API_ACCESS_FIELDS = ["allowAPIAccess", "widgetLength", "widgetHeight", "widgetColour"] as const
+const DISCOUNT_HISTORY_FIELDS = ["code", "type", "value", "maxUses", "active", "expiryDate", "applicableTickets"] as const
+
+// Same resolution as spotix-admin's resolveFeeBurden — legacy events only carry buyerBearsBurden.
+function currentFeeBurden(d: Record<string, any> | undefined) {
+  const fb = d?.feeBurden
+  if (fb && typeof fb === "object") {
+    return { coversPaystackFee: fb.coversPaystackFee === true, coversSpotixFee: fb.coversSpotixFee === true }
+  }
+  return { coversPaystackFee: false, coversSpotixFee: d?.buyerBearsBurden === false }
+}
 
 function ok(data: object, status = 200) {
   return NextResponse.json({ success: true, developer: DEV_TAG, ...data }, { status })
@@ -247,7 +266,20 @@ export async function PATCH(
     }
 
     try {
+      const beforeEdit = pickFields(owned.snap.data(), EDIT_HISTORY_FIELDS)
       await eventRef.update(updateData)
+
+      // Edit history → Supabase via spotix-backend. Fire-and-forget; never
+      // blocks or fails the save. Fields the form didn't send (country/state
+      // on legacy events) keep their old value so they don't show as wiped.
+      recordEditHistory({
+        eventId,
+        organizerId: userId,
+        action: "event_updated",
+        actor: ownerActor(userId),
+        before: beforeEdit,
+        after: { ...beforeEdit, ...pickFields(updateData, EDIT_HISTORY_FIELDS.filter((k) => k in updateData)) },
+      })
 
       // Bust spotix-user's cached event doc (event:doc:{eventId} — same
       // Upstash instance, see lib/redis.ts) so the public event page picks
@@ -311,6 +343,14 @@ export async function PATCH(
 
     try {
       await eventRef.update({ eventSlug: finalSlug, updatedAt: FieldValue.serverTimestamp() })
+      recordEditHistory({
+        eventId,
+        organizerId: userId,
+        action: "slug_changed",
+        actor: ownerActor(userId),
+        before: { eventSlug: owned.snap.data()?.eventSlug ?? null },
+        after: { eventSlug: finalSlug },
+      })
       return ok({ message: "Event link created", eventSlug: finalSlug })
     } catch (e: any) {
       console.error("[PATCH setSlug] failed", e)
@@ -323,6 +363,8 @@ export async function PATCH(
   const access = await resolveParityAccess(eventId, userId)
   if (access instanceof NextResponse) return access
   const eventRef = access.eventRef
+  const actor = actorFromAccess(access, userId)
+  const beforeDoc = access.eventSnap.data() as Record<string, any> | undefined
 
   // -- action: apiAccess ---------------------------------------------------
   // Toggles allowAPIAccess and sets widget display options for this event.
@@ -353,6 +395,15 @@ export async function PATCH(
 
     try {
       await eventRef.update(update)
+      const beforeApi = pickFields(beforeDoc, API_ACCESS_FIELDS)
+      recordEditHistory({
+        eventId,
+        organizerId: access.organizerId,
+        action: "api_settings_updated",
+        actor,
+        before: beforeApi,
+        after: { ...beforeApi, ...pickFields(update, API_ACCESS_FIELDS.filter((k) => k in update)) },
+      })
       return ok({ message: "API & widget settings updated" })
     } catch (e: any) {
       console.error("[PATCH apiAccess] failed", e)
@@ -393,6 +444,14 @@ export async function PATCH(
           agentIncentive: { type: agentIncentive.type, value: Number(agentIncentive.value) },
           updatedAt: FieldValue.serverTimestamp(),
         })
+        recordEditHistory({
+          eventId,
+          organizerId: access.organizerId,
+          action: "agent_activity_enabled",
+          actor,
+          before: { allowAgents: currentValue, agentIncentive: beforeDoc?.agentIncentive ?? null },
+          after: { allowAgents: true, agentIncentive: { type: agentIncentive.type, value: Number(agentIncentive.value) } },
+        })
         return ok({
           message: "Agent activity enabled",
           allowAgents: true,
@@ -406,6 +465,14 @@ export async function PATCH(
 
     try {
       await eventRef.update({ allowAgents: false, updatedAt: FieldValue.serverTimestamp() })
+      recordEditHistory({
+        eventId,
+        organizerId: access.organizerId,
+        action: "agent_activity_disabled",
+        actor,
+        before: { allowAgents: currentValue },
+        after: { allowAgents: false },
+      })
       return ok({ message: "Agent activity disabled", allowAgents: false })
     } catch (e: any) {
       console.error("[PATCH toggleAgentActivity] failed", e)
@@ -429,6 +496,14 @@ export async function PATCH(
     try {
       const value = { type: agentIncentive.type, value: Number(agentIncentive.value) }
       await eventRef.update({ agentIncentive: value, updatedAt: FieldValue.serverTimestamp() })
+      recordEditHistory({
+        eventId,
+        organizerId: access.organizerId,
+        action: "agent_incentive_updated",
+        actor,
+        before: { agentIncentive: beforeDoc?.agentIncentive ?? null },
+        after: { agentIncentive: value },
+      })
       return ok({ message: "Incentive updated", agentIncentive: value })
     } catch (e: any) {
       console.error("[PATCH setAgentIncentive] failed", e)
@@ -448,6 +523,16 @@ export async function PATCH(
     const currentActive = discountSnap.data()!.active !== false
     try {
       await discountRef.update({ active: !currentActive })
+      const discountBefore = pickFields(discountSnap.data(), DISCOUNT_HISTORY_FIELDS)
+      recordEditHistory({
+        eventId,
+        organizerId: access.organizerId,
+        action: "discount_toggled",
+        actor,
+        changes: {
+          discount: { before: discountBefore, after: { ...discountBefore, active: !currentActive } },
+        },
+      })
       return ok({ message: "Discount status updated", active: !currentActive })
     } catch (e: any) {
       console.error("[PATCH toggleDiscount] failed", e)
@@ -520,6 +605,18 @@ export async function PATCH(
       await discountRef.update(update)
       const fresh = await discountRef.get()
       const d = fresh.data()!
+      recordEditHistory({
+        eventId,
+        organizerId: access.organizerId,
+        action: "discount_updated",
+        actor,
+        changes: {
+          discount: {
+            before: pickFields(discountSnap.data(), DISCOUNT_HISTORY_FIELDS),
+            after: pickFields(d, DISCOUNT_HISTORY_FIELDS),
+          },
+        },
+      })
       return ok({
         message: "Discount updated successfully",
         discount: {
@@ -572,6 +669,14 @@ export async function PATCH(
         // still resolves the Spotix-fee half correctly.
         buyerBearsBurden: !normalisedFeeBurden.coversSpotixFee,
         updatedAt: FieldValue.serverTimestamp(),
+      })
+      recordEditHistory({
+        eventId,
+        organizerId: access.organizerId,
+        action: "fee_burden_updated",
+        actor,
+        before: { feeBurden: currentFeeBurden(beforeDoc) },
+        after: { feeBurden: normalisedFeeBurden },
       })
       return ok({ message: "Fee burden updated", feeBurden: normalisedFeeBurden })
     } catch (e: any) {
@@ -669,6 +774,13 @@ export async function POST(
 
   try {
     const docRef = await eventRef.collection("discounts").add(discountDoc)
+    recordEditHistory({
+      eventId,
+      organizerId: access.organizerId,
+      action: "discount_created",
+      actor: actorFromAccess(access, userId),
+      changes: { discount: { before: null, after: pickFields(discountDoc, DISCOUNT_HISTORY_FIELDS) } },
+    })
     return ok(
       {
         message: "Discount added successfully",
